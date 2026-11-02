@@ -131,8 +131,8 @@ For a one-click public release you need an Apple Developer ID and notarization:
 
 1. Sign with a **Developer ID Application** identity instead of `-`.
 2. Sign the nested binaries and the app with the hardened runtime.
-3. Create the DMG.
-4. Submit it:
+3. Create the DMGs.
+4. Submit each one:
 
 ```bash
 for arch in arm64 x64; do
