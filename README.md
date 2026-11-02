@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/wprudencio/myna/releases/latest/download/Myna-1.0.0-universal.dmg">
+  <a href="https://github.com/wprudencio/myna/releases/latest/download/Myna-1.1.0-universal.dmg">
     <b>Download Myna for macOS →</b>
   </a><br>
   <sub>Universal · macOS 13.5+ · one 110 MB DMG</sub>
@@ -44,7 +44,10 @@ menu bar bird shows the progress. After that, Myna works offline.
 
 - **A menu bar app, not a terminal tool.** Close every window. Myna keeps working.
 - **One shortcut.** **⌃⌥Space** starts and stops recording from any app.
-- **Automatic clipboard.** The transcript is copied the moment you stop speaking.
+- **Your choice of output.** Copy the transcript to the clipboard, or let Myna
+  type it at the cursor for you.
+- **Automatic clipboard.** In clipboard mode, the transcript is copied the moment
+  you stop speaking.
 - **Local speech recognition.** Audio and text never leave the Mac. The model is
   [Parakeet Redux](https://huggingface.co/mrfakename/parakeet-redux-ONNX), running
   through ONNX Runtime on the CPU.

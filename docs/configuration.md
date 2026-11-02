@@ -54,6 +54,15 @@ The orange microphone indicator in the menu bar is visible while it is warm.
 The menu's **Sounds** item overrides this for the current user. The menu choice is
 remembered by macOS.
 
+## Output mode
+
+The **After dictation** menu chooses between **Copy to clipboard** and **Type at
+cursor**. That choice is stored in macOS `UserDefaults` for
+`com.wprudencio.myna`, not in `config.json`, and is remembered across launches.
+
+**Type at cursor** needs Accessibility permission. See
+[Using Myna](usage.md#choose-where-the-text-goes).
+
 ## Custom recorder (advanced)
 
 `recorder` can replace the built-in microphone helper with any command that writes

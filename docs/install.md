@@ -16,7 +16,7 @@ download.
 
 ## Install
 
-1. Download **`Myna-1.0.0-universal.dmg`** from the
+1. Download **`Myna-1.1.0-universal.dmg`** from the
    [latest release](https://github.com/wprudencio/myna/releases/latest).
 2. Open the DMG.
 3. Drag **Myna** into the **Applications** folder.
@@ -68,6 +68,18 @@ go to:
 
 Myna uses the current default input device. Change it in
 **System Settings → Sound → Input**.
+
+## Accessibility (only for Type at cursor)
+
+The default **Copy to clipboard** mode needs no extra permission.
+
+If you choose **After dictation → Type at cursor**, macOS asks for
+**Accessibility** access. This lets Myna press **⌘V** for you.
+
+**System Settings → Privacy & Security → Accessibility → Myna**
+
+The transcript is still copied if the permission is missing, so you can always
+paste it manually. The Myna menu has **Open Accessibility Settings…** for this.
 
 ## Updating
 

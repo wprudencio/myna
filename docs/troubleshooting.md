@@ -47,6 +47,20 @@ enabled in **System Settings → Privacy & Security → Microphone**.
 The microphone used is the current default input. Check
 **System Settings → Sound → Input** and make sure the device is not muted.
 
+## Type at cursor does nothing
+
+Check that **After dictation → Type at cursor** is selected and that **Myna** is
+enabled in **System Settings → Privacy & Security → Accessibility**.
+
+The menu has **After dictation → Open Accessibility Settings…** for this. If Myna
+was already enabled there but a new build still cannot paste, remove Myna from the
+list with the **−** button, add `/Applications/Myna.app` again, and reopen Myna.
+
+Even without permission, the transcript is copied. Paste it with **⌘V**.
+
+Note that **Type at cursor** sends **⌘V**, so it works in apps that support the
+standard paste shortcut. Secure input fields may ignore synthetic keystrokes.
+
 ## Nothing is transcribed
 
 - Speak after pressing the shortcut; the menu bar should show a timer.

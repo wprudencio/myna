@@ -9,17 +9,36 @@ Myna lives in the menu bar. There is no main window and no Dock icon.
 3. Speak normally.
 4. Press **⌃⌥Space** again.
 
-When you stop, Myna transcribes locally, copies the text to the clipboard, and
-flashes the bird green. Paste with **⌘V**.
-
-Myna does **not** paste for you. This keeps it from needing Accessibility
-permission and from typing into the wrong window.
+When you stop, Myna transcribes locally and flashes the bird green.
 
 You can also start and stop from the menu with **Start Recording** / **Stop
 Recording**. The menu item is useful if the shortcut conflicts with another app.
 
 A single recording is limited to **5 minutes**. Myna stops automatically at the
 limit and transcribes what it has.
+
+## Choose where the text goes
+
+Open the Myna menu and look at **After dictation**:
+
+- **Copy to clipboard** — the transcript is copied and you paste it with **⌘V**.
+  This is the default and needs no special permission.
+- **Type at cursor** — Myna puts the transcript on the clipboard and presses
+  **⌘V** for you, so the text appears in the app you were using. This requires
+  **Accessibility** permission.
+
+The choice is remembered. To use **Type at cursor**:
+
+1. Choose **After dictation → Type at cursor**.
+2. macOS asks for Accessibility access. Allow Myna.
+3. If the prompt does not appear, choose **After dictation → Open Accessibility
+   Settings…** and enable **Myna** in
+   **System Settings → Privacy & Security → Accessibility**.
+
+If permission is missing, Myna still copies the transcript and shows a reminder.
+The text is never lost; paste it with **⌘V**.
+
+Myna does not read the clipboard. It only writes the transcript to it.
 
 ## Menu bar states
 
@@ -57,9 +76,9 @@ configurable in [Configuration](configuration.md).
 
 ## Clipboard and history
 
-The transcript is copied automatically. Myna keeps the **last 100 transcripts**
-in `~/.myna/history.json`; the menu shows the most recent one and can copy it
-again.
+In both output modes, the transcript is written to the clipboard. Myna keeps the
+**last 100 transcripts** in `~/.myna/history.json`; the menu shows the most recent
+one and can copy it again.
 
 Myna does not read the clipboard. It only writes the transcript to it.
 

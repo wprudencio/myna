@@ -204,7 +204,7 @@ async function buildApp(nodeBinary) {
   await compileUniversal({
     source: join(ROOT, "native/menubar.swift"),
     output: join(CONTENTS, "MacOS", "Myna"),
-    frameworks: ["AppKit", "Carbon"],
+    frameworks: ["AppKit", "ApplicationServices", "Carbon", "CoreGraphics"],
   });
 
   console.log("compiling the microphone helper (universal)");

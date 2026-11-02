@@ -41,12 +41,13 @@ npm run build
 Outputs:
 
 - `dist/Myna.app` — self-contained universal app
-- `dist/Myna-1.0.0-universal.dmg` — drag-to-Applications disk image
+- `dist/Myna-1.1.0-universal.dmg` — drag-to-Applications disk image
 
 The script:
 
-1. compiles `native/menubar.swift` for `arm64` and `x86_64`, then combines the
-   slices with `lipo`
+1. compiles `native/menubar.swift` for `arm64` and `x86_64` with AppKit,
+   ApplicationServices, Carbon, and CoreGraphics, then combines the slices with
+   `lipo`
 2. compiles the microphone helper the same way
 3. copies a universal Node runtime into `Contents/Resources/runtime`
 4. copies the daemon source and both `darwin` ONNX Runtime builds
@@ -67,7 +68,7 @@ MYNA_NODE_BINARY=/path/to/universal/node npm run build
 
 | Path | Purpose |
 | --- | --- |
-| `native/menubar.swift` | Menu bar host, global hotkey, child process, icon |
+| `native/menubar.swift` | Menu bar host, global hotkey, output mode, child process, icon |
 | `native/recorder.swift` | Microphone helper, 16 kHz mono PCM |
 | `src/daemon.js` | Recording state machine, clipboard, history |
 | `src/asr.js` | ONNX sessions and greedy TDT decoder |
@@ -120,9 +121,9 @@ For a one-click public release you need an Apple Developer ID and notarization:
 4. Submit it:
 
 ```bash
-xcrun notarytool submit dist/Myna-1.0.0-universal.dmg \
+xcrun notarytool submit dist/Myna-1.1.0-universal.dmg \
   --keychain-profile myna-notary --wait
-xcrun stapler staple dist/Myna-1.0.0-universal.dmg
+xcrun stapler staple dist/Myna-1.1.0-universal.dmg
 ```
 
 Keep the Developer ID private key and notary credentials out of the repository.
@@ -132,9 +133,11 @@ Keep the Developer ID private key and notary credentials out of the repository.
 - [ ] `npm test` passes
 - [ ] `npm run build` produces the DMG
 - [ ] `codesign --verify --deep --strict dist/Myna.app`
-- [ ] `hdiutil verify dist/Myna-1.0.0-universal.dmg`
+- [ ] `hdiutil verify dist/Myna-1.1.0-universal.dmg`
 - [ ] launch `dist/Myna.app`, confirm the menu bar bird, model load, and a
-      dictation
+      dictation in **Copy to clipboard** mode
+- [ ] grant Accessibility, select **Type at cursor**, and confirm a dictation
+      pastes into a text editor
 - [ ] quit cleanly from the menu and confirm no daemon or recognizer processes
       remain
 - [ ] attach the DMG and test the app from a copy in Applications

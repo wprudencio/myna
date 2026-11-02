@@ -52,12 +52,25 @@ status item, the Carbon global hotkey, and the child process.
 
 ## The shortcut
 
-Myna uses a Carbon `RegisterEventHotKey` shortcut. It works in every app and does
-not need Accessibility permission. It only receives the registered combination;
-it cannot read other keys.
+Myna uses a Carbon `RegisterEventHotKey` shortcut. It works in every app. The
+shortcut itself does not need Accessibility permission; it only receives the
+registered combination and cannot read other keys.
 
 The default is **⌃⌥Space**. The combo is parsed from `config.json` by the bundled
 runtime and passed to the Swift host as a Carbon key code and modifier mask.
+
+## Output modes
+
+The daemon always writes the transcript to the clipboard. The Swift host then
+decides what to do next:
+
+- **Copy to clipboard** — stop there. You paste with ⌘V.
+- **Type at cursor** — send a synthetic **⌘V** with `CGEvent.postToPid` to the app
+  that was in front when recording started (or the current frontmost app).
+
+Sending synthetic keystrokes to another app requires Accessibility permission.
+Without it, Myna falls back to the clipboard and explains how to enable it. It
+never reads your keystrokes or other apps' contents.
 
 ## The model
 

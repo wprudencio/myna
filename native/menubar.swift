@@ -11,7 +11,9 @@
  */
 
 import AppKit
+import ApplicationServices
 import Carbon
+import CoreGraphics
 import Foundation
 
 private let HOTKEY_ID: UInt32 = 1
@@ -26,6 +28,9 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     var hotkeyLabel = ""
     var hotkeyError: String?
     var soundsEnabled = true
+    var outputMode = "clipboard"
+    var pasteTarget: pid_t?
+    var didExplainAccessibility = false
     var startedAt = Date()
     var recordingStartedAt: Date?
     var flashUntil: Date?
@@ -68,6 +73,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         setupSignalHandlers()
         setupTimer()
         registerHotkey()
+        loadOutputMode()
         refresh()
 
         writeState()
@@ -219,6 +225,9 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
 
         The first launch downloads the speech model (about 363 MB) in the \
         background. Audio and transcripts stay on this Mac.
+
+        In the menu, choose whether Myna should copy the text or type it at \
+        the cursor for you.
         """
         box.alertStyle = .informational
         box.addButton(withTitle: "Got it")
@@ -398,6 +407,44 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(.separator())
 
+        let outputTitle = outputMode == "type"
+            ? "After dictation: Type at cursor"
+            : "After dictation: Copy to clipboard"
+        let output = NSMenuItem(title: outputTitle, action: nil, keyEquivalent: "")
+        let outputMenu = NSMenu()
+
+        let clipboardMode = NSMenuItem(
+            title: "Copy to clipboard",
+            action: #selector(useClipboardMode),
+            keyEquivalent: ""
+        )
+        clipboardMode.target = self
+        clipboardMode.state = outputMode == "clipboard" ? .on : .off
+        outputMenu.addItem(clipboardMode)
+
+        let typeMode = NSMenuItem(
+            title: "Type at cursor",
+            action: #selector(useTypeMode),
+            keyEquivalent: ""
+        )
+        typeMode.target = self
+        typeMode.state = outputMode == "type" ? .on : .off
+        outputMenu.addItem(typeMode)
+
+        outputMenu.addItem(.separator())
+        let accessibility = NSMenuItem(
+            title: "Open Accessibility Settings…",
+            action: #selector(openAccessibilitySettings),
+            keyEquivalent: ""
+        )
+        accessibility.target = self
+        outputMenu.addItem(accessibility)
+
+        output.submenu = outputMenu
+        menu.addItem(output)
+
+        menu.addItem(.separator())
+
         let micTitle = "Microphone: \(mic == "warm" ? "warm" : mic == "warming" ? "starting…" : "cold")"
         let micItem = NSMenuItem(title: micTitle, action: nil, keyEquivalent: "")
         micItem.isEnabled = false
@@ -496,6 +543,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
             startDaemon()
             return
         }
+        capturePasteTarget()
         send(["type": "toggle"])
     }
 
@@ -633,6 +681,12 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 flashWork = work
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.7, execute: work)
+                if outputMode == "type" {
+                    let textToPaste = text
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) { [weak self] in
+                        self?.pasteAtCursor(textToPaste)
+                    }
+                }
                 refresh()
                 writeState()
             }
@@ -671,6 +725,88 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
+    }
+
+    // MARK: - output mode
+
+    private func loadOutputMode() {
+        if let saved = UserDefaults.standard.string(forKey: "outputMode"),
+           saved == "clipboard" || saved == "type" {
+            outputMode = saved
+        }
+        didExplainAccessibility = UserDefaults.standard.bool(forKey: "didExplainAccessibility")
+    }
+
+    private func capturePasteTarget() {
+        guard let app = NSWorkspace.shared.frontmostApplication else { return }
+        guard app.processIdentifier != getpid() else { return }
+        pasteTarget = app.processIdentifier
+    }
+
+    private func currentPasteTarget() -> pid_t? {
+        if let target = pasteTarget,
+           let app = NSRunningApplication(processIdentifier: target),
+           !app.isTerminated {
+            return target
+        }
+        if let app = NSWorkspace.shared.frontmostApplication,
+           app.processIdentifier != getpid() {
+            return app.processIdentifier
+        }
+        return nil
+    }
+
+    private func pasteAtCursor(_ text: String) {
+        guard outputMode == "type" else { return }
+        guard AXIsProcessTrusted() else {
+            explainAccessibilityIfNeeded()
+            return
+        }
+        guard NSPasteboard.general.string(forType: .string) == text else { return }
+
+        let source = CGEventSource(stateID: .combinedSessionState)
+        guard
+            let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true),
+            let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
+        else {
+            return
+        }
+        keyDown.flags = .maskCommand
+        keyUp.flags = .maskCommand
+
+        if let pid = currentPasteTarget() {
+            keyDown.postToPid(pid)
+            Thread.sleep(forTimeInterval: 0.01)
+            keyUp.postToPid(pid)
+        } else {
+            keyDown.post(tap: .cghidEventTap)
+            Thread.sleep(forTimeInterval: 0.01)
+            keyUp.post(tap: .cghidEventTap)
+        }
+    }
+
+    private func explainAccessibilityIfNeeded() {
+        guard !didExplainAccessibility else { return }
+        didExplainAccessibility = true
+        UserDefaults.standard.set(true, forKey: "didExplainAccessibility")
+
+        NSApp.activate(ignoringOtherApps: true)
+        let box = NSAlert()
+        box.messageText = "Turn on Accessibility for Myna"
+        box.informativeText = """
+        To type the transcript for you, Myna needs Accessibility permission.
+
+        The text is already on your clipboard, so you can paste it with ⌘V now.
+
+        Enable Myna in System Settings → Privacy & Security → Accessibility, \
+        then choose “Type at cursor” again.
+        """
+        box.alertStyle = .informational
+        box.addButton(withTitle: "Open Settings")
+        box.addButton(withTitle: "Not Now")
+        if box.runModal() == .alertFirstButtonReturn {
+            openAccessibilitySettings()
+        }
     }
 
     // MARK: - state file
@@ -721,6 +857,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
             startDaemon()
             return
         }
+        capturePasteTarget()
         send(["type": "toggle"])
     }
 
@@ -751,6 +888,33 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openMicrophoneSettings() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    @objc private func useClipboardMode() {
+        outputMode = "clipboard"
+        UserDefaults.standard.set(outputMode, forKey: "outputMode")
+        rebuildMenu()
+    }
+
+    @objc private func useTypeMode() {
+        outputMode = "type"
+        UserDefaults.standard.set(outputMode, forKey: "outputMode")
+        rebuildMenu()
+
+        if !AXIsProcessTrusted() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                let options = [
+                    kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true
+                ] as CFDictionary
+                _ = AXIsProcessTrustedWithOptions(options)
+            }
+        }
+    }
+
+    @objc private func openAccessibilitySettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
             NSWorkspace.shared.open(url)
         }
     }

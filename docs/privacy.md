@@ -29,9 +29,12 @@ anywhere. It may contain short error excerpts.
 ## Permissions
 
 - **Microphone** — required for dictation. macOS asks the first time.
-- **No Accessibility permission** — Myna uses a registered Carbon hotkey and does
-  not simulate keystrokes or inspect other apps.
+- **Accessibility** — only if you choose **Type at cursor**. Myna uses it to send
+  the standard **⌘V** paste shortcut to the app in front. It does not read your
+  keystrokes or inspect other apps.
 - **No Full Disk Access** — not requested.
+
+The default **Copy to clipboard** mode does not need Accessibility permission.
 
 ## macOS-side storage
 
