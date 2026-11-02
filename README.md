@@ -11,20 +11,31 @@
 
 <p align="center">
   <img alt="macOS 13.5+" src="https://img.shields.io/badge/macOS-13.5%2B-14211f">
-  <img alt="universal" src="https://img.shields.io/badge/universal-Intel%20%2B%20Apple%20Silicon-ff5a1f">
+  <img alt="Apple Silicon + Intel" src="https://img.shields.io/badge/Apple%20Silicon%20%2B%20Intel-14211f">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-3fa66a">
 </p>
 
 <p align="center">
-  <a href="https://github.com/wprudencio/myna/releases/latest/download/Myna-1.2.0-universal.dmg">
-    <b>Download Myna for macOS →</b>
+  <a href="https://github.com/wprudencio/myna/releases/latest/download/Myna-1.2.1-arm64.dmg">
+    <b>Download for Apple Silicon →</b>
   </a><br>
-  <sub>Universal · macOS 13.5+ · one 110 MB DMG</sub>
+  <sub>Apple Silicon · macOS 13.5+ · about 35 MB</sub>
+</p>
+
+<p align="center">
+  <a href="https://github.com/wprudencio/myna/releases/latest/download/Myna-1.2.1-x64.dmg">
+    <b>Download for Intel →</b>
+  </a><br>
+  <sub>Intel Macs · macOS 13.5+ · about 38 MB</sub>
+</p>
+
+<p align="center">
+  <sub>Not sure? <b>Apple menu → About This Mac</b> shows Chip or Processor.</sub>
 </p>
 
 ## Install
 
-1. Open the DMG and drag **Myna** into **Applications**.
+1. Open the DMG for your Mac and drag **Myna** into **Applications**.
 2. Open **Myna**. The bird appears in the menu bar.
 3. Press **⌃⌥Space** to start dictating. Press it again to stop.
 
@@ -54,7 +65,8 @@ menu bar bird shows the progress. After that, Myna works offline.
   German. [See the full list](#languages).
 - **A replacement for typing.** Emails, notes, chat, code comments — Myna can
   paste the transcript at your cursor, or leave it on the clipboard.
-- **Works on Intel and Apple Silicon.** One universal app for every current Mac.
+- **Works on Intel and Apple Silicon.** Two small downloads, each with only the
+  runtime your Mac needs.
 
 ## Languages
 
@@ -71,7 +83,7 @@ it hears.
 
 - macOS 13.5 or newer
 - Intel or Apple Silicon Mac
-- About 500 MB free for the app and 363 MB for the model on first launch
+- About 160 MB free for the app and 363 MB for the model on first launch
 - A microphone
 
 ## Documentation

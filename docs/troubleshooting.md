@@ -16,6 +16,12 @@ happens, remove the quarantine flag once:
 xattr -dr com.apple.quarantine /Applications/Myna.app
 ```
 
+**“Myna is not supported on this Mac.”**
+
+You downloaded the wrong build. An Intel Mac needs the **x64** DMG; an Apple
+Silicon Mac needs the **arm64** DMG. Download the other file from the release
+page.
+
 **“Myna is already running.”**
 
 Only one copy can run. Look in the menu bar. If the icon is hidden by a menu bar

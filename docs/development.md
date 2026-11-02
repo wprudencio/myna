@@ -1,14 +1,15 @@
 # Development
 
 Myna is a native Swift menu bar host around a small Node daemon and an ONNX
-recognizer. The release DMG is built on macOS and contains no developer tools.
+recognizer. The release DMGs are built on macOS and contain no developer tools.
 
 ## Requirements
 
 - macOS 13.5 or newer
 - Xcode Command Line Tools (`xcode-select --install`)
 - Node.js 20.3 or newer
-- A **universal** Node binary for packaging (`x86_64` + `arm64`)
+- A **universal** Node binary for packaging (`x86_64` + `arm64`); the build
+  slices it into the two DMGs
 
 The official Node macOS installer provides a universal `/usr/local/bin/node`. A
 Homebrew Node is usually single-architecture; use the official build or set
@@ -36,10 +37,13 @@ For UI work, launching the built app with `--shortcut` opens the shortcut picker
 directly:
 
 ```bash
-dist/Myna.app/Contents/MacOS/Myna --shortcut
+# Intel Mac
+dist/Myna-x64.app/Contents/MacOS/Myna --shortcut
+# Apple Silicon
+dist/Myna-arm64.app/Contents/MacOS/Myna --shortcut
 ```
 
-## Build the app and DMG
+## Build the apps and DMGs
 
 ```bash
 npm run build
@@ -47,20 +51,23 @@ npm run build
 
 Outputs:
 
-- `dist/Myna.app` — self-contained universal app
-- `dist/Myna-1.2.0-universal.dmg` — drag-to-Applications disk image
+- `dist/Myna-arm64.app` — self-contained Apple Silicon app
+- `dist/Myna-x64.app` — self-contained Intel app
+- `dist/Myna-1.2.1-arm64.dmg` — Apple Silicon disk image
+- `dist/Myna-1.2.1-x64.dmg` — Intel disk image
+- `dist/Myna-1.2.1-*.dmg.sha256` — checksums
 
 The script:
 
 1. compiles `native/menubar.swift` for `arm64` and `x86_64` with AppKit,
-   ApplicationServices, Carbon, and CoreGraphics, then combines the slices with
-   `lipo`
+   ApplicationServices, Carbon, and CoreGraphics
 2. compiles the microphone helper the same way
-3. copies a universal Node runtime into `Contents/Resources/runtime`
-4. copies the daemon source and both `darwin` ONNX Runtime builds
+3. slices the universal Node runtime with `lipo -thin` into each app
+4. copies the daemon source and only the matching `darwin` ONNX Runtime build
 5. writes `Info.plist`, the icon, and the licenses
-6. ad-hoc signs every nested Mach-O file and the app bundle
-7. creates the DMG, signs it ad-hoc, and verifies it
+6. ad-hoc signs every nested Mach-O file and each app bundle
+7. creates both DMGs with LZMA compression, signs them ad-hoc, verifies them,
+   and writes the SHA-256 files
 
 The model is **not** bundled. The app downloads it on first launch, exactly like
 the release build.
@@ -84,7 +91,7 @@ MYNA_NODE_BINARY=/path/to/universal/node npm run build
 | `src/recorder.js` | Microphone helper build/launch and custom recorder |
 | `src/model.js` | Resumeable Hugging Face download |
 | `src/app-config.js` | Turns `config.json` into the menu bar hotkey |
-| `scripts/build-release.mjs` | Universal app and DMG builder |
+| `scripts/build-release.mjs` | Two-architecture app and DMG builder |
 | `test/` | Unit, snapshot, and FIFO integration tests |
 
 The terminal renderer in `src/tui.js` is a development harness used by the
@@ -128,9 +135,11 @@ For a one-click public release you need an Apple Developer ID and notarization:
 4. Submit it:
 
 ```bash
-xcrun notarytool submit dist/Myna-1.2.0-universal.dmg \
-  --keychain-profile myna-notary --wait
-xcrun stapler staple dist/Myna-1.2.0-universal.dmg
+for arch in arm64 x64; do
+  xcrun notarytool submit "dist/Myna-1.2.1-$arch.dmg" \
+    --keychain-profile myna-notary --wait
+  xcrun stapler staple "dist/Myna-1.2.1-$arch.dmg"
+done
 ```
 
 Keep the Developer ID private key and notary credentials out of the repository.
@@ -138,10 +147,10 @@ Keep the Developer ID private key and notary credentials out of the repository.
 ## Release checklist
 
 - [ ] `npm test` passes
-- [ ] `npm run build` produces the DMG
-- [ ] `codesign --verify --deep --strict dist/Myna.app`
-- [ ] `hdiutil verify dist/Myna-1.2.0-universal.dmg`
-- [ ] launch `dist/Myna.app`, confirm the menu bar bird, model load, and a
+- [ ] `npm run build` produces both DMGs and both SHA-256 files
+- [ ] `codesign --verify --deep --strict dist/Myna-arm64.app dist/Myna-x64.app`
+- [ ] `hdiutil verify dist/Myna-1.2.1-arm64.dmg dist/Myna-1.2.1-x64.dmg`
+- [ ] launch the app for this Mac, confirm the menu bar bird, model load, and a
       dictation in **Copy to clipboard** mode
 - [ ] grant Accessibility, select **Type at cursor**, and confirm a dictation
       pastes into a text editor
@@ -149,8 +158,9 @@ Keep the Developer ID private key and notary credentials out of the repository.
       works immediately without restarting
 - [ ] quit cleanly from the menu and confirm no daemon or recognizer processes
       remain
-- [ ] attach the DMG and test the app from a copy in Applications
-- [ ] publish the DMG and its SHA-256 in the GitHub release
+- [ ] attach both DMGs, confirm each contains a thin app for its architecture,
+      and test the native build from Applications
+- [ ] publish both DMGs and their SHA-256 files in the GitHub release
 
 ## Licenses
 

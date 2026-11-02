@@ -1,6 +1,6 @@
 {
   "name": "myna",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "A tiny macOS menu bar dictation app. Local speech recognition, powered by Parakeet Redux and ONNX Runtime.",
   "type": "module",
   "files": [

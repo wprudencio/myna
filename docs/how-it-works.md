@@ -21,21 +21,22 @@ microphone
 
 ## The app bundle
 
-The DMG contains one universal `Myna.app`:
+There are two DMGs, one for Apple Silicon and one for Intel. Each contains a
+thin `Myna.app` for that architecture:
 
 ```
 Myna.app/Contents/
-  MacOS/Myna                     universal Swift menu bar host
-  Resources/runtime/node         universal Node.js
-  Resources/app/                 JavaScript daemon and ONNX Runtime
-  Resources/bin/myna-recorder    universal Swift microphone helper
+  MacOS/Myna                     Swift menu bar host (arm64 or x86_64)
+  Resources/runtime/node         Node.js for the same architecture
+  Resources/app/                 JavaScript daemon and matching ONNX Runtime
+  Resources/bin/myna-recorder    Swift microphone helper (same architecture)
   Resources/Myna.icns
   Resources/licenses/
 ```
 
-Both Intel (`x86_64`) and Apple Silicon (`arm64`) slices are present for the
-Swift binaries and Node. ONNX Runtime includes its `darwin/x64` and `darwin/arm64`
-builds. Nothing is compiled or installed on the user's Mac.
+The build slices the universal Node binary with `lipo` and copies only the
+matching `onnxruntime-node` `darwin/arm64` or `darwin/x64` build. Nothing is
+compiled or installed on the user's Mac.
 
 The app is ad-hoc signed. A Developer ID signature and notarization can be added
 later without changing the bundle layout.

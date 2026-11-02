@@ -1,36 +1,54 @@
 #!/usr/bin/env node
 /*
- * Build the self-contained universal macOS app and a drag-to-Applications DMG.
+ * Build the self-contained macOS apps and two drag-to-Applications DMGs:
+ * one for Apple Silicon (arm64) and one for Intel (x64).
  *
  * Usage:
  *   node scripts/build-release.mjs
  *
- * The app bundles its own universal Node runtime, both macOS ONNX Runtime
- * architectures, the Swift menu bar host, and the Swift microphone helper.
+ * Each app bundles its own Node runtime and ONNX Runtime slice for one
+ * architecture, the Swift menu bar host, and the Swift microphone helper.
  * The model is downloaded on first launch and is not part of the app.
  */
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, promises as fs } from "node:fs";
-import { join, relative } from "node:path";
+import { basename, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { infoPlist } from "../src/menubar.js";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const DIST = join(ROOT, "dist");
-const BUILD = join(DIST, ".build");
-const APP = join(DIST, "Myna.app");
-const CONTENTS = join(APP, "Contents");
-const RESOURCES = join(CONTENTS, "Resources");
-const APP_RUNTIME = join(RESOURCES, "app");
-const WORK = join(DIST, "dmg-root");
+const MIN_MACOS = "13.5";
+
+const TARGETS = [
+  {
+    name: "arm64",
+    swiftArch: "arm64",
+    nodeArch: "arm64",
+    ortArch: "arm64",
+    label: "Apple Silicon (arm64)",
+  },
+  {
+    name: "x64",
+    swiftArch: "x86_64",
+    nodeArch: "x64",
+    ortArch: "x64",
+    label: "Intel (x64)",
+  },
+];
 
 const pkg = JSON.parse(await fs.readFile(join(ROOT, "package.json"), "utf8"));
 const VERSION = pkg.version;
-const DMG = join(DIST, `Myna-${VERSION}-universal.dmg`);
-const MIN_MACOS = "13.5";
-const ARCHS = ["arm64", "x86_64"];
+
+function appPath(target) {
+  return join(DIST, `Myna-${target.name}.app`);
+}
+
+function dmgPath(target) {
+  return join(DIST, `Myna-${VERSION}-${target.name}.dmg`);
+}
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -68,48 +86,47 @@ function resolveNodeBinary() {
   if (!universal) {
     throw new Error(
       `the Node binary is not universal: ${binary}\n${info.trim()}\n` +
+        "The two-DMG build slices a universal Node binary into arm64 and x64. " +
         "Use the official universal macOS Node build or set MYNA_NODE_BINARY."
     );
   }
   return { binary, info: info.trim() };
 }
 
-async function compileUniversal({ source, output, frameworks = [] }) {
-  const pieces = [];
-  for (const arch of ARCHS) {
-    const piece = join(BUILD, `${relative(BUILD, output).replaceAll("/", "-")}.${arch}`);
-    const args = [
-      "-O",
-      "-swift-version",
-      "5",
-      "-target",
-      `${arch}-apple-macosx${MIN_MACOS}`,
-    ];
-    for (const framework of frameworks) args.push("-framework", framework);
-    args.push("-o", piece, source);
-    console.log(`  swiftc ${arch} ${relative(ROOT, source)}`);
-    run("swiftc", args);
-    pieces.push(piece);
-  }
+async function compile({ source, output, arch, frameworks = [] }) {
   await fs.mkdir(join(output, ".."), { recursive: true });
-  run("lipo", ["-create", "-output", output, ...pieces]);
+  const args = [
+    "-O",
+    "-swift-version",
+    "5",
+    "-target",
+    `${arch}-apple-macosx${MIN_MACOS}`,
+  ];
+  for (const framework of frameworks) args.push("-framework", framework);
+  args.push("-o", output, source);
+  console.log(`  swiftc ${arch} ${relative(ROOT, source)}`);
+  run("swiftc", args);
   await fs.chmod(output, 0o755);
-  for (const piece of pieces) await fs.rm(piece, { force: true });
 }
 
-async function copyRuntime(nodeBinary) {
-  await fs.mkdir(join(RESOURCES, "runtime"), { recursive: true });
-  await fs.mkdir(join(RESOURCES, "bin"), { recursive: true });
-  await fs.mkdir(join(RESOURCES, "licenses"), { recursive: true });
+async function copyRuntime(target, nodeBinary) {
+  const app = appPath(target);
+  const resources = join(app, "Contents", "Resources");
+  const appRuntime = join(resources, "app");
 
-  console.log("copying the universal Node runtime");
-  await fs.copyFile(nodeBinary, join(RESOURCES, "runtime", "node"));
-  await fs.chmod(join(RESOURCES, "runtime", "node"), 0o755);
+  await fs.mkdir(join(resources, "runtime"), { recursive: true });
+  await fs.mkdir(join(resources, "bin"), { recursive: true });
+  await fs.mkdir(join(resources, "licenses"), { recursive: true });
+
+  console.log(`slicing the ${target.name} Node runtime`);
+  const nodeOutput = join(resources, "runtime", "node");
+  run("lipo", ["-thin", target.swiftArch, nodeBinary, "-output", nodeOutput]);
+  await fs.chmod(nodeOutput, 0o755);
 
   console.log("copying the application source");
-  await fs.mkdir(join(APP_RUNTIME, "src"), { recursive: true });
+  await fs.mkdir(join(appRuntime, "src"), { recursive: true });
   await fs.writeFile(
-    join(APP_RUNTIME, "package.json"),
+    join(appRuntime, "package.json"),
     `${JSON.stringify(
       { name: "myna-runtime", version: VERSION, private: true, type: "module" },
       null,
@@ -131,105 +148,124 @@ async function copyRuntime(nodeBinary) {
     "util.js",
   ];
   for (const file of runtimeFiles) {
-    await fs.copyFile(join(ROOT, "src", file), join(APP_RUNTIME, "src", file));
+    await fs.copyFile(join(ROOT, "src", file), join(appRuntime, "src", file));
   }
 
-  console.log("copying ONNX Runtime for darwin x64 and arm64");
-  const ort = join(APP_RUNTIME, "node_modules", "onnxruntime-node");
-  const common = join(APP_RUNTIME, "node_modules", "onnxruntime-common");
+  console.log(`copying ONNX Runtime for darwin ${target.ortArch}`);
+  const ort = join(appRuntime, "node_modules", "onnxruntime-node");
+  const common = join(appRuntime, "node_modules", "onnxruntime-common");
   await fs.mkdir(ort, { recursive: true });
   await fs.copyFile(join(ROOT, "node_modules/onnxruntime-node/package.json"), join(ort, "package.json"));
   await fs.cp(join(ROOT, "node_modules/onnxruntime-node/dist"), join(ort, "dist"), {
     recursive: true,
   });
-  for (const arch of ["x64", "arm64"]) {
-    await fs.cp(
-      join(ROOT, "node_modules/onnxruntime-node/bin/napi-v6/darwin", arch),
-      join(ort, "bin/napi-v6/darwin", arch),
-      { recursive: true }
-    );
-  }
+  await fs.cp(
+    join(ROOT, "node_modules/onnxruntime-node/bin/napi-v6/darwin", target.ortArch),
+    join(ort, "bin/napi-v6/darwin", target.ortArch),
+    { recursive: true }
+  );
   await fs.mkdir(common, { recursive: true });
   await fs.copyFile(join(ROOT, "node_modules/onnxruntime-common/package.json"), join(common, "package.json"));
   await fs.cp(join(ROOT, "node_modules/onnxruntime-common/dist"), join(common, "dist"), {
     recursive: true,
   });
 
-  await fs.copyFile(join(ROOT, "assets", "Myna.icns"), join(RESOURCES, "Myna.icns"));
-  await fs.cp(join(ROOT, "assets", "licenses"), join(RESOURCES, "licenses"), { recursive: true });
-  await fs.copyFile(join(ROOT, "LICENSE"), join(RESOURCES, "licenses", "MYNA-LICENSE"));
+  await fs.copyFile(join(ROOT, "assets", "Myna.icns"), join(resources, "Myna.icns"));
+  await fs.cp(join(ROOT, "assets", "licenses"), join(resources, "licenses"), { recursive: true });
+  await fs.copyFile(join(ROOT, "LICENSE"), join(resources, "licenses", "MYNA-LICENSE"));
 }
 
 function sign(path, extra = []) {
   run("codesign", ["--force", "--sign", "-", ...extra, path]);
 }
 
-async function signApp() {
-  console.log("signing nested binaries (ad-hoc)");
+async function signApp(target) {
+  const app = appPath(target);
+  const resources = join(app, "Contents", "Resources");
+  const appRuntime = join(resources, "app");
+  const ort = join(
+    appRuntime,
+    "node_modules/onnxruntime-node/bin/napi-v6/darwin",
+    target.ortArch
+  );
+
+  console.log(`signing nested binaries (ad-hoc, ${target.name})`);
   const targets = [
-    join(RESOURCES, "runtime", "node"),
-    join(RESOURCES, "bin", "myna-recorder"),
-    join(RESOURCES, "app", "node_modules/onnxruntime-node/bin/napi-v6/darwin/x64/onnxruntime_binding.node"),
-    join(RESOURCES, "app", "node_modules/onnxruntime-node/bin/napi-v6/darwin/x64/libonnxruntime.1.23.2.dylib"),
-    join(RESOURCES, "app", "node_modules/onnxruntime-node/bin/napi-v6/darwin/arm64/onnxruntime_binding.node"),
-    join(RESOURCES, "app", "node_modules/onnxruntime-node/bin/napi-v6/darwin/arm64/libonnxruntime.1.23.2.dylib"),
-    join(CONTENTS, "MacOS", "Myna"),
+    join(resources, "runtime", "node"),
+    join(resources, "bin", "myna-recorder"),
+    join(ort, "onnxruntime_binding.node"),
+    join(ort, "libonnxruntime.1.23.2.dylib"),
+    join(app, "Contents", "MacOS", "Myna"),
   ];
-  for (const target of targets) {
+  for (const path of targets) {
     /* Node ships with hardened-runtime flags and JIT entitlements. Preserve
      * them so the bundled runtime keeps working after ad-hoc signing. */
-    const extra = target.endsWith("/runtime/node")
+    const extra = path.endsWith("/runtime/node")
       ? ["--preserve-metadata=entitlements,flags"]
       : [];
-    sign(target, extra);
+    sign(path, extra);
   }
-  sign(APP, ["--identifier", "com.wprudencio.myna"]);
-  run("codesign", ["--verify", "--deep", "--strict", "--verbose=2", APP]);
+  sign(app, ["--identifier", "com.wprudencio.myna"]);
+  run("codesign", ["--verify", "--deep", "--strict", "--verbose=2", app]);
 }
 
-async function writePlist() {
-  const path = join(CONTENTS, "Info.plist");
+async function writePlist(app) {
+  const path = join(app, "Contents", "Info.plist");
   await fs.writeFile(path, infoPlist());
   run("plutil", ["-lint", path]);
   run("plutil", ["-p", path]);
 }
 
-async function buildApp(nodeBinary) {
-  await fs.rm(APP, { recursive: true, force: true });
-  await fs.rm(BUILD, { recursive: true, force: true });
-  await fs.mkdir(join(CONTENTS, "MacOS"), { recursive: true });
-  await fs.mkdir(BUILD, { recursive: true });
+async function buildApp(target, nodeBinary) {
+  const app = appPath(target);
+  const contents = join(app, "Contents");
+  const resources = join(contents, "Resources");
 
-  console.log("compiling the menu bar app (universal)");
-  await compileUniversal({
+  await fs.rm(app, { recursive: true, force: true });
+  await fs.mkdir(join(contents, "MacOS"), { recursive: true });
+  await fs.mkdir(resources, { recursive: true });
+
+  console.log(`compiling the menu bar app (${target.name})`);
+  await compile({
     source: join(ROOT, "native/menubar.swift"),
-    output: join(CONTENTS, "MacOS", "Myna"),
+    output: join(contents, "MacOS", "Myna"),
+    arch: target.swiftArch,
     frameworks: ["AppKit", "ApplicationServices", "Carbon", "CoreGraphics"],
   });
 
-  console.log("compiling the microphone helper (universal)");
-  await compileUniversal({
+  console.log(`compiling the microphone helper (${target.name})`);
+  await compile({
     source: join(ROOT, "native/recorder.swift"),
-    output: join(RESOURCES, "bin", "myna-recorder"),
+    output: join(resources, "bin", "myna-recorder"),
+    arch: target.swiftArch,
   });
 
-  await copyRuntime(nodeBinary);
-  await writePlist();
-  await signApp();
+  await copyRuntime(target, nodeBinary);
+  await writePlist(app);
+  await signApp(target);
 
-  console.log(`lipo: ${run("lipo", ["-info", join(CONTENTS, "MacOS", "Myna")]).trim()}`);
-  console.log(`lipo: ${run("lipo", ["-info", join(RESOURCES, "bin", "myna-recorder")]).trim()}`);
-  console.log(`lipo: ${run("lipo", ["-info", join(RESOURCES, "runtime", "node")]).trim()}`);
+  console.log(`lipo: ${run("lipo", ["-info", join(contents, "MacOS", "Myna")]).trim()}`);
+  console.log(`lipo: ${run("lipo", ["-info", join(resources, "bin", "myna-recorder")]).trim()}`);
+  console.log(`lipo: ${run("lipo", ["-info", join(resources, "runtime", "node")]).trim()}`);
 }
 
-async function buildDmg() {
-  await fs.rm(WORK, { recursive: true, force: true });
-  await fs.mkdir(WORK, { recursive: true });
-  await fs.cp(APP, join(WORK, "Myna.app"), { recursive: true, verbatimSymlinks: true });
-  await fs.symlink("/Applications", join(WORK, "Applications"));
+async function buildDmg(target) {
+  const app = appPath(target);
+  const work = join(DIST, `.dmg-root-${target.name}`);
+  const dmg = dmgPath(target);
+  const platform = target.name === "arm64" ? "Apple Silicon" : "Intel";
+  const other = target.name === "arm64" ? "an Intel Mac" : "an Apple Silicon Mac";
+
+  await fs.rm(work, { recursive: true, force: true });
+  await fs.mkdir(work, { recursive: true });
+  await fs.cp(app, join(work, "Myna.app"), { recursive: true, verbatimSymlinks: true });
+  await fs.symlink("/Applications", join(work, "Applications"));
   await fs.writeFile(
-    join(WORK, "READ ME FIRST.txt"),
-    `Myna ${VERSION} — universal (Intel and Apple Silicon)
+    join(work, "READ ME FIRST.txt"),
+    `Myna ${VERSION} — ${platform} (${target.name})
+
+This is the ${platform} build. If this Mac is ${other}, download the other
+DMG from the release page.
 
 1. Drag Myna into Applications.
 2. Open Myna from Applications.
@@ -251,24 +287,24 @@ The only network request is the first-run model download.
 `
   );
 
-  await fs.rm(DMG, { force: true });
-  console.log("creating the DMG");
+  await fs.rm(dmg, { force: true });
+  console.log(`creating the ${target.name} DMG`);
   run("hdiutil", [
     "create",
     "-volname",
     "Myna",
     "-srcfolder",
-    WORK,
+    work,
     "-ov",
     "-format",
-    "UDZO",
+    "ULMO",
     "-fs",
     "HFS+",
-    DMG,
+    dmg,
   ]);
-  sign(DMG);
-  run("hdiutil", ["verify", DMG]);
-  await fs.rm(WORK, { recursive: true, force: true });
+  sign(dmg);
+  run("hdiutil", ["verify", dmg]);
+  await fs.rm(work, { recursive: true, force: true });
 }
 
 async function main() {
@@ -282,15 +318,30 @@ async function main() {
   console.log(`Version: ${VERSION}`);
 
   await fs.mkdir(DIST, { recursive: true });
-  await buildApp(node.binary);
-  await buildDmg();
+  await fs.rm(join(DIST, ".build"), { recursive: true, force: true });
+  await fs.rm(join(DIST, "Myna.app"), { recursive: true, force: true });
 
-  const size = (await fs.stat(DMG)).size;
-  const hash = createHash("sha256").update(await fs.readFile(DMG)).digest("hex");
-  console.log("");
-  console.log(`app: ${relative(ROOT, APP)}`);
-  console.log(`dmg: ${relative(ROOT, DMG)} (${(size / 1024 / 1024).toFixed(1)} MB)`);
-  console.log(`sha256: ${hash}`);
+  const artifacts = [];
+  for (const target of TARGETS) {
+    console.log(`\n=== ${target.label} ===`);
+    await buildApp(target, node.binary);
+    await buildDmg(target);
+    artifacts.push(target);
+  }
+
+  console.log("\nArtifacts:");
+  for (const target of artifacts) {
+    const dmg = dmgPath(target);
+    const size = (await fs.stat(dmg)).size;
+    const hash = createHash("sha256").update(await fs.readFile(dmg)).digest("hex");
+    await fs.writeFile(`${dmg}.sha256`, `${hash}  ${basename(dmg)}\n`);
+    console.log(`  app: ${relative(ROOT, appPath(target))}`);
+    console.log(`  dmg: ${relative(ROOT, dmg)} (${(size / 1024 / 1024).toFixed(1)} MB)`);
+    console.log(`  sha256: ${hash}`);
+  }
+
+  const native = process.arch === "arm64" ? "arm64" : "x64";
+  console.log(`\nTest build for this Mac: ${relative(ROOT, appPath({ name: native }))}`);
 }
 
 main().catch((error) => {

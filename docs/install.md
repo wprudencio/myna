@@ -8,15 +8,23 @@ any terminal commands to install or use it.
 - macOS **13.5** or newer
 - An Intel or Apple Silicon Mac
 - A microphone
-- About **110 MB** for the app and **363 MB** for the speech model
+- About **35 MB** (Apple Silicon) or **38 MB** (Intel) for the app download
+- About **363 MB** for the speech model
 - An internet connection for the first model download
 
-The same DMG works on every supported Mac. There is no separate Intel or M1–M4
-download.
+There are two downloads. Pick the one for your Mac:
+
+| Mac | File |
+| --- | --- |
+| Apple Silicon (M1–M4) | `Myna-1.2.1-arm64.dmg` |
+| Intel | `Myna-1.2.1-x64.dmg` |
+
+Not sure? Open **Apple menu → About This Mac**. **Chip** means Apple Silicon;
+**Processor** means Intel.
 
 ## Install
 
-1. Download **`Myna-1.2.0-universal.dmg`** from the
+1. Download the DMG for your Mac from the
    [latest release](https://github.com/wprudencio/myna/releases/latest).
 2. Open the DMG.
 3. Drag **Myna** into the **Applications** folder.
@@ -56,6 +64,10 @@ Apple Developer ID and notarization.
 
 If macOS says the app is damaged, delete it, download the DMG again, and repeat
 the steps above. Do not move the app out of Applications while it is running.
+
+If macOS says **Myna is not supported on this Mac**, you downloaded the wrong
+build. An Intel Mac needs the **x64** DMG; an Apple Silicon Mac needs the
+**arm64** DMG.
 
 ## Microphone permission
 
@@ -105,7 +117,7 @@ If you added Myna to **Login Items**, remove it in
 
 | Path | Contents |
 | --- | --- |
-| `/Applications/Myna.app` | The app, bundled Node runtime, ONNX Runtime, Swift helper |
+| `/Applications/Myna.app` | The app, bundled Node runtime, ONNX Runtime, Swift helper for your Mac's architecture |
 | `~/.myna/models` | Parakeet Redux model files, about 363 MB |
 | `~/.myna/config.json` | Your settings, created when you change something |
 | `~/.myna/history.json` | The last 100 transcripts |
