@@ -12,10 +12,16 @@ defaults below when it is missing.
 }
 ```
 
-Quit Myna from the menu and open it again after changing the file. There is no
-in-app preferences window in this release.
+Most settings are changed in the Myna menu. `config.json` is the advanced file
+behind them. Quit and reopen Myna after editing it by hand.
 
 ## Shortcut
+
+The easiest way to change the shortcut is the menu:
+
+**Myna menu → Shortcut: ⌃⌥Space… → press the new combination → Save**
+
+The picker writes `config.json` and registers the shortcut immediately.
 
 `hotkey` uses `ctrl`, `alt` (or `option`), `shift`, and `cmd` (or `command`), plus
 one key.
@@ -28,10 +34,9 @@ Supported keys: `space`, `return`, `enter`, `tab`, `escape`, `left`, `right`,
 `up`, `down`, letters, digits, `F1`–`F12`, and common punctuation.
 
 The shortcut must include **Ctrl**, **Option**, or **Command**. Shift alone is
-not allowed because it would fire while you type capitals.
-
-If the new shortcut is unavailable, the menu shows a warning. Choose another one
-and reopen Myna.
+not allowed because it would fire while you type capitals. If a combination is
+reserved by macOS or another app, the menu shows a warning and Myna keeps the
+previous shortcut.
 
 ## Microphone warm time
 

@@ -32,6 +32,13 @@ The suite covers the recognizer, WAV parsing, history, hotkey parsing, daemon
 config, and the terminal renderer's snapshot tests. It needs no model,
 microphone, or GUI session.
 
+For UI work, launching the built app with `--shortcut` opens the shortcut picker
+directly:
+
+```bash
+dist/Myna.app/Contents/MacOS/Myna --shortcut
+```
+
 ## Build the app and DMG
 
 ```bash
@@ -41,7 +48,7 @@ npm run build
 Outputs:
 
 - `dist/Myna.app` — self-contained universal app
-- `dist/Myna-1.1.0-universal.dmg` — drag-to-Applications disk image
+- `dist/Myna-1.2.0-universal.dmg` — drag-to-Applications disk image
 
 The script:
 
@@ -68,7 +75,7 @@ MYNA_NODE_BINARY=/path/to/universal/node npm run build
 
 | Path | Purpose |
 | --- | --- |
-| `native/menubar.swift` | Menu bar host, global hotkey, output mode, child process, icon |
+| `native/menubar.swift` | Menu bar host, shortcut picker, output mode, child process, icon |
 | `native/recorder.swift` | Microphone helper, 16 kHz mono PCM |
 | `src/daemon.js` | Recording state machine, clipboard, history |
 | `src/asr.js` | ONNX sessions and greedy TDT decoder |
@@ -121,9 +128,9 @@ For a one-click public release you need an Apple Developer ID and notarization:
 4. Submit it:
 
 ```bash
-xcrun notarytool submit dist/Myna-1.1.0-universal.dmg \
+xcrun notarytool submit dist/Myna-1.2.0-universal.dmg \
   --keychain-profile myna-notary --wait
-xcrun stapler staple dist/Myna-1.1.0-universal.dmg
+xcrun stapler staple dist/Myna-1.2.0-universal.dmg
 ```
 
 Keep the Developer ID private key and notary credentials out of the repository.
@@ -133,11 +140,13 @@ Keep the Developer ID private key and notary credentials out of the repository.
 - [ ] `npm test` passes
 - [ ] `npm run build` produces the DMG
 - [ ] `codesign --verify --deep --strict dist/Myna.app`
-- [ ] `hdiutil verify dist/Myna-1.1.0-universal.dmg`
+- [ ] `hdiutil verify dist/Myna-1.2.0-universal.dmg`
 - [ ] launch `dist/Myna.app`, confirm the menu bar bird, model load, and a
       dictation in **Copy to clipboard** mode
 - [ ] grant Accessibility, select **Type at cursor**, and confirm a dictation
       pastes into a text editor
+- [ ] open **Shortcut…**, record a new combination, save it, and confirm it
+      works immediately without restarting
 - [ ] quit cleanly from the menu and confirm no daemon or recognizer processes
       remain
 - [ ] attach the DMG and test the app from a copy in Applications

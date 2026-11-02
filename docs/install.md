@@ -16,7 +16,7 @@ download.
 
 ## Install
 
-1. Download **`Myna-1.1.0-universal.dmg`** from the
+1. Download **`Myna-1.2.0-universal.dmg`** from the
    [latest release](https://github.com/wprudencio/myna/releases/latest).
 2. Open the DMG.
 3. Drag **Myna** into the **Applications** folder.

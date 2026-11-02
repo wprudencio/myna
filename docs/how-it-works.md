@@ -56,8 +56,14 @@ Myna uses a Carbon `RegisterEventHotKey` shortcut. It works in every app. The
 shortcut itself does not need Accessibility permission; it only receives the
 registered combination and cannot read other keys.
 
-The default is **⌃⌥Space**. The combo is parsed from `config.json` by the bundled
-runtime and passed to the Swift host as a Carbon key code and modifier mask.
+The default is **⌃⌥Space**. At launch, the combo is parsed from `config.json` by
+the bundled runtime and passed to the Swift host as a Carbon key code and modifier
+mask.
+
+The menu's **Shortcut…** picker records a new combination, writes `config.json`,
+and re-registers the Carbon hotkey immediately. It pauses the old shortcut while
+the picker is open, so pressing the current combination does not start a
+dictation.
 
 ## Output modes
 

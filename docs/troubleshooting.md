@@ -32,8 +32,10 @@ manager, quit Myna and open it again, or use Activity Monitor to quit any leftov
 
 ## The shortcut does nothing
 
-- Another app may own **⌃⌥Space**. Quit that app or choose another shortcut in
-  [Configuration](configuration.md), then reopen Myna.
+- Another app may own **⌃⌥Space**. Open **Shortcut: ⌃⌥Space…** in the Myna menu
+  and record a different combination.
+- If the picker says the combination is unavailable, macOS or another app has
+  reserved it. Try another one; Myna keeps the previous shortcut.
 - If the menu says **Shortcut unavailable**, the system refused the registration.
   Pick a different combination.
 - The menu's **Start Recording** item always works, even if the shortcut does not.

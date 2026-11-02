@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/wprudencio/myna/releases/latest/download/Myna-1.1.0-universal.dmg">
+  <a href="https://github.com/wprudencio/myna/releases/latest/download/Myna-1.2.0-universal.dmg">
     <b>Download Myna for macOS →</b>
   </a><br>
   <sub>Universal · macOS 13.5+ · one 110 MB DMG</sub>
@@ -43,7 +43,8 @@ menu bar bird shows the progress. After that, Myna works offline.
 ## What you get
 
 - **A menu bar app, not a terminal tool.** Close every window. Myna keeps working.
-- **One shortcut.** **⌃⌥Space** starts and stops recording from any app.
+- **One shortcut.** **⌃⌥Space** starts and stops recording from any app. Change
+  it from the menu whenever it conflicts with something else.
 - **Your choice of output.** Copy the transcript to the clipboard, or let Myna
   type it at the cursor for you.
 - **Automatic clipboard.** In clipboard mode, the transcript is copied the moment
@@ -52,10 +53,21 @@ menu bar bird shows the progress. After that, Myna works offline.
   [Parakeet Redux](https://huggingface.co/mrfakename/parakeet-redux-ONNX), running
   through ONNX Runtime on the CPU.
 - **25 European languages**, including Portuguese, English, Spanish, French, and
-  German. No language setting to manage.
-- **A replacement for typing.** Emails, notes, chat, code comments — wherever the
-  cursor is, the text lands in your clipboard, ready to paste.
+  German. [See the full list](#languages).
+- **A replacement for typing.** Emails, notes, chat, code comments — Myna can
+  paste the transcript at your cursor, or leave it on the clipboard.
 - **Works on Intel and Apple Silicon.** One universal app for every current Mac.
+
+## Languages
+
+Parakeet Redux supports **25 European languages**:
+
+English, German, French, Spanish, Italian, Portuguese, Russian, Ukrainian,
+Croatian, Slovenian, Latvian, Lithuanian, Estonian, Finnish, Swedish, Danish,
+Dutch, Polish, Czech, Slovak, Hungarian, Romanian, Bulgarian, Greek, and Maltese.
+
+There is no language setting to manage. Speak naturally and Myna transcribes what
+it hears.
 
 ## Requirements
 

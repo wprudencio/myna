@@ -47,7 +47,7 @@ Myna does not read the clipboard. It only writes the transcript to it.
 | Outline bird | Idle, ready |
 | Bird with a timer | Recording |
 | Animated coral crest | Transcribing |
-| Green flash | Copied to the clipboard |
+| Green flash | Transcript delivered |
 | Orange bird / warning | Needs attention; open the menu for the reason |
 | Grey or hidden | The app is starting, or a menu bar manager is hiding it |
 
@@ -62,8 +62,23 @@ During recording the menu bar also shows a timer.
 - **Sounds** — the start and finish sounds
 - **Open Microphone Settings…**
 - **Restart Daemon** if the background process stopped
-- **Shortcut: ⌃⌥Space** — the current shortcut
+- **Shortcut: ⌃⌥Space…** — opens the shortcut picker
 - **Quit Myna**
+
+## Change the shortcut
+
+1. Open the Myna menu.
+2. Choose **Shortcut: ⌃⌥Space…**.
+3. Press the new combination.
+4. Click **Save**.
+
+The shortcut must use **Control**, **Option**, or **Command** plus a key. It takes
+effect immediately; no restart is needed. Myna pauses the current shortcut while
+the picker is open, so you can press the same combination without starting a
+dictation.
+
+Some combinations are reserved by macOS or another app. If Myna cannot register
+one, it keeps the previous shortcut and shows a message.
 
 ## Microphone warm mode
 
@@ -84,9 +99,13 @@ Myna does not read the clipboard. It only writes the transcript to it.
 
 ## Language
 
-Parakeet Redux understands **25 European languages**, including Portuguese,
-English, Spanish, French, German, Italian, Dutch, Polish, and Swedish. There is
-no language switch; speak naturally.
+Parakeet Redux understands **25 European languages**:
+
+English, German, French, Spanish, Italian, Portuguese, Russian, Ukrainian,
+Croatian, Slovenian, Latvian, Lithuanian, Estonian, Finnish, Swedish, Danish,
+Dutch, Polish, Czech, Slovak, Hungarian, Romanian, Bulgarian, Greek, and Maltese.
+
+There is no language switch; speak naturally.
 
 ## Start at login (optional)
 

@@ -18,7 +18,165 @@ import Foundation
 
 private let HOTKEY_ID: UInt32 = 1
 
-private final class AppDelegate: NSObject, NSApplicationDelegate {
+private struct ShortcutChoice {
+    let keyCode: UInt16
+    let modifiers: UInt32
+    let key: String
+    let label: String
+    let normalized: String
+}
+
+private let shortcutKeyNames: [UInt16: String] = [
+    0: "a", 1: "s", 2: "d", 3: "f", 4: "h", 5: "g", 6: "z", 7: "x", 8: "c", 9: "v",
+    11: "b", 12: "q", 13: "w", 14: "e", 15: "r", 16: "y", 17: "t",
+    18: "1", 19: "2", 20: "3", 21: "4", 22: "6", 23: "5", 24: "=", 25: "9",
+    26: "7", 27: "-", 28: "8", 29: "0", 30: "]", 31: "o", 32: "u", 33: "[",
+    34: "i", 35: "p", 36: "return", 37: "l", 38: "j", 39: "'", 40: "k",
+    41: ";", 42: "\\", 43: ",", 44: "/", 45: "n", 46: "m", 47: ".",
+    48: "tab", 49: "space", 50: "`", 53: "escape",
+    122: "f1", 120: "f2", 99: "f3", 118: "f4", 96: "f5", 97: "f6",
+    98: "f7", 100: "f8", 101: "f9", 109: "f10", 103: "f11", 111: "f12",
+    123: "left", 124: "right", 125: "down", 126: "up",
+]
+
+private func shortcutKeyLabel(_ key: String) -> String {
+    switch key {
+    case "space": return "Space"
+    case "return": return "Return"
+    case "tab": return "Tab"
+    case "escape": return "Esc"
+    case "left": return "←"
+    case "right": return "→"
+    case "up": return "↑"
+    case "down": return "↓"
+    default: return key.uppercased()
+    }
+}
+
+private func shortcutChoice(from event: NSEvent) -> ShortcutChoice? {
+    let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+    var modifiers: UInt32 = 0
+    var parts: [String] = []
+    var symbols = ""
+
+    if flags.contains(.control) {
+        modifiers |= 4096
+        parts.append("ctrl")
+        symbols += "⌃"
+    }
+    if flags.contains(.option) {
+        modifiers |= 2048
+        parts.append("alt")
+        symbols += "⌥"
+    }
+    if flags.contains(.shift) {
+        modifiers |= 512
+        parts.append("shift")
+        symbols += "⇧"
+    }
+    if flags.contains(.command) {
+        modifiers |= 256
+        parts.append("cmd")
+        symbols += "⌘"
+    }
+
+    guard modifiers & (4096 | 2048 | 256) != 0 else { return nil }
+    guard let key = shortcutKeyNames[event.keyCode] else { return nil }
+
+    return ShortcutChoice(
+        keyCode: event.keyCode,
+        modifiers: modifiers,
+        key: key,
+        label: symbols + shortcutKeyLabel(key),
+        normalized: parts.joined(separator: "+") + "+" + key
+    )
+}
+
+private final class ShortcutRecorderView: NSView {
+    var onCapture: ((ShortcutChoice) -> Void)?
+    var onCancel: (() -> Void)?
+    private let hint = NSTextField(labelWithString: "Press the new shortcut")
+    private let value = NSTextField(labelWithString: "")
+    private var captured: ShortcutChoice?
+
+    init(label: String) {
+        super.init(frame: NSRect(x: 0, y: 0, width: 320, height: 76))
+        wantsLayer = true
+        layer?.cornerRadius = 8
+        layer?.borderWidth = 1
+        layer?.borderColor = NSColor.separatorColor.cgColor
+        layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
+
+        hint.frame = NSRect(x: 0, y: 52, width: 320, height: 16)
+        hint.alignment = .center
+        hint.font = .systemFont(ofSize: 11)
+        hint.textColor = .secondaryLabelColor
+        hint.autoresizingMask = [.width]
+        addSubview(hint)
+
+        value.frame = NSRect(x: 0, y: 16, width: 320, height: 32)
+        value.alignment = .center
+        value.font = .systemFont(ofSize: 24, weight: .medium)
+        value.stringValue = label
+        value.autoresizingMask = [.width]
+        addSubview(value)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var acceptsFirstResponder: Bool { true }
+
+    override func becomeFirstResponder() -> Bool {
+        updateBorder()
+        return true
+    }
+
+    override func resignFirstResponder() -> Bool {
+        updateBorder()
+        return true
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(self)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if !handle(event) {
+            super.keyDown(with: event)
+        }
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if handle(event) {
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+
+    @discardableResult
+    private func handle(_ event: NSEvent) -> Bool {
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if event.keyCode == 53 && flags.isEmpty {
+            onCancel?()
+            return true
+        }
+        guard let choice = shortcutChoice(from: event) else { return false }
+        captured = choice
+        value.stringValue = choice.label
+        onCapture?(choice)
+        return true
+    }
+
+    private func updateBorder() {
+        let focused = window?.firstResponder === self
+        layer?.borderWidth = focused ? 2 : 1
+        layer?.borderColor = (focused ? NSColor.keyboardFocusIndicatorColor : NSColor.separatorColor).cgColor
+    }
+}
+
+private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var statusItem: NSStatusItem!
     var menu = NSMenu()
     var status = "starting"
@@ -57,6 +215,10 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     var hotKeyHandler: EventHandlerRef?
     var signalSources: [DispatchSourceSignal] = []
     var lastErrorSound = Date.distantPast
+    var shortcutWindow: NSWindow?
+    var shortcutRecorder: ShortcutRecorderView?
+    var shortcutSaveButton: NSButton?
+    var pendingShortcut: ShortcutChoice?
 
     let tink = NSSound(contentsOfFile: "/System/Library/Sounds/Tink.aiff", byReference: true)
     let pop = NSSound(contentsOfFile: "/System/Library/Sounds/Pop.aiff", byReference: true)
@@ -83,6 +245,14 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
             UserDefaults.standard.set(true, forKey: "didWelcome")
             DispatchQueue.main.async { [weak self] in
                 self?.welcome()
+            }
+        }
+
+        /* Developer/test hook: open the shortcut picker without clicking the
+         * status item. Not used by the normal launch path. */
+        if CommandLine.arguments.contains("--shortcut") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.openShortcutWindow()
             }
         }
     }
@@ -470,11 +640,14 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
             menu.addItem(restart)
         }
 
-        if !hotkeyLabel.isEmpty {
-            let shortcut = NSMenuItem(title: "Shortcut: \(hotkeyLabel)", action: nil, keyEquivalent: "")
-            shortcut.isEnabled = false
-            menu.addItem(shortcut)
-        }
+        let shortcutTitle = hotkeyLabel.isEmpty ? "Shortcut…" : "Shortcut: \(hotkeyLabel)…"
+        let shortcut = NSMenuItem(
+            title: shortcutTitle,
+            action: #selector(openShortcutWindow),
+            keyEquivalent: ""
+        )
+        shortcut.target = self
+        menu.addItem(shortcut)
 
         menu.addItem(.separator())
         let quit = NSMenuItem(title: "Quit Myna", action: #selector(quitMyna), keyEquivalent: "q")
@@ -491,7 +664,15 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - hotkey
 
+    private func unregisterHotkey() {
+        guard let ref = hotKeyRef else { return }
+        _ = UnregisterEventHotKey(ref)
+        hotKeyRef = nil
+    }
+
     private func registerHotkey() {
+        unregisterHotkey()
+
         let keyCode = (config["keyCode"] as? Int) ?? 49
         let modifiers = (config["modifiers"] as? Int) ?? 6144
         let signature = OSType(0x50524B54) // 'PRKT'
@@ -500,28 +681,31 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
             eventClass: OSType(kEventClassKeyboard),
             eventKind: UInt32(kEventHotKeyPressed)
         )
-        let callback: EventHandlerUPP = { _, _, userData in
-            guard let userData = userData else { return noErr }
-            let delegate = Unmanaged<AppDelegate>.fromOpaque(userData).takeUnretainedValue()
-            DispatchQueue.main.async {
-                delegate.hotkeyPressed()
-            }
-            return noErr
-        }
         let target = GetApplicationEventTarget()
-        let installStatus = withUnsafePointer(to: &eventType) { pointer in
-            InstallEventHandler(
-                target,
-                callback,
-                1,
-                pointer,
-                Unmanaged.passUnretained(self).toOpaque(),
-                &hotKeyHandler
-            )
-        }
-        guard installStatus == noErr else {
-            hotkeyError = "Could not install the shortcut handler."
-            return
+
+        if hotKeyHandler == nil {
+            let callback: EventHandlerUPP = { _, _, userData in
+                guard let userData = userData else { return noErr }
+                let delegate = Unmanaged<AppDelegate>.fromOpaque(userData).takeUnretainedValue()
+                DispatchQueue.main.async {
+                    delegate.hotkeyPressed()
+                }
+                return noErr
+            }
+            let installStatus = withUnsafePointer(to: &eventType) { pointer in
+                InstallEventHandler(
+                    target,
+                    callback,
+                    1,
+                    pointer,
+                    Unmanaged.passUnretained(self).toOpaque(),
+                    &hotKeyHandler
+                )
+            }
+            guard installStatus == noErr else {
+                hotkeyError = "Could not install the shortcut handler."
+                return
+            }
         }
 
         let hotKeyID = EventHotKeyID(signature: signature, id: HOTKEY_ID)
@@ -533,9 +717,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
             0,
             &hotKeyRef
         )
-        if status != noErr {
-            hotkeyError = "Shortcut \(hotkeyLabel) is unavailable."
-        }
+        hotkeyError = status == noErr ? nil : "Shortcut \(hotkeyLabel) is unavailable."
     }
 
     private func hotkeyPressed() {
@@ -916,6 +1098,158 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func openAccessibilitySettings() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
             NSWorkspace.shared.open(url)
+        }
+    }
+
+    // MARK: - shortcut window
+
+    @objc private func openShortcutWindow() {
+        if status == "recording" || status == "arming" {
+            alert("Stop recording first", "Finish the current dictation before changing the shortcut.")
+            return
+        }
+        if let window = shortcutWindow {
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+            if let recorder = shortcutRecorder {
+                window.makeFirstResponder(recorder)
+            }
+            return
+        }
+
+        unregisterHotkey()
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 380, height: 230),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Myna Shortcut"
+        window.isReleasedWhenClosed = false
+        window.isMovableByWindowBackground = true
+        window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
+        window.delegate = self
+        window.center()
+
+        let content = NSView(frame: NSRect(x: 0, y: 0, width: 380, height: 230))
+        window.contentView = content
+
+        let recorder = ShortcutRecorderView(label: hotkeyLabel.isEmpty ? "⌃⌥Space" : hotkeyLabel)
+        recorder.frame = NSRect(x: 30, y: 118, width: 320, height: 76)
+        recorder.onCapture = { [weak self] choice in
+            self?.pendingShortcut = choice
+            self?.shortcutSaveButton?.isEnabled = true
+        }
+        recorder.onCancel = { [weak self] in
+            self?.closeShortcutWindow()
+        }
+        content.addSubview(recorder)
+
+        let note = NSTextField(
+            wrappingLabelWithString: "Use Control, Option, or Command plus a key. Some combinations are reserved by macOS."
+        )
+        note.frame = NSRect(x: 30, y: 76, width: 320, height: 32)
+        note.alignment = .center
+        note.font = .systemFont(ofSize: 11)
+        note.textColor = .secondaryLabelColor
+        content.addSubview(note)
+
+        let save = NSButton(title: "Save", target: self, action: #selector(saveShortcut))
+        save.bezelStyle = .rounded
+        save.keyEquivalent = "\r"
+        save.frame = NSRect(x: 200, y: 22, width: 90, height: 32)
+        save.isEnabled = false
+        content.addSubview(save)
+
+        let cancel = NSButton(title: "Cancel", target: self, action: #selector(cancelShortcut))
+        cancel.bezelStyle = .rounded
+        cancel.keyEquivalent = "\u{1b}"
+        cancel.frame = NSRect(x: 90, y: 22, width: 90, height: 32)
+        content.addSubview(cancel)
+
+        shortcutWindow = window
+        shortcutRecorder = recorder
+        shortcutSaveButton = save
+        pendingShortcut = nil
+
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+        window.makeFirstResponder(recorder)
+    }
+
+    @objc private func saveShortcut() {
+        if let choice = pendingShortcut {
+            applyShortcut(choice)
+        }
+        closeShortcutWindow()
+    }
+
+    @objc private func cancelShortcut() {
+        closeShortcutWindow()
+    }
+
+    private func closeShortcutWindow() {
+        shortcutWindow?.close()
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow, window === shortcutWindow else { return }
+        shortcutWindow = nil
+        shortcutRecorder = nil
+        shortcutSaveButton = nil
+        pendingShortcut = nil
+
+        /* The global shortcut is paused while the recorder is open, so the
+         * user can press the current combination without starting a dictation. */
+        registerHotkey()
+        refresh()
+    }
+
+    private func applyShortcut(_ choice: ShortcutChoice) {
+        let previousConfig = config
+        let previousLabel = hotkeyLabel
+        let previousError = hotkeyError
+
+        config["keyCode"] = Int(choice.keyCode)
+        config["modifiers"] = Int(choice.modifiers)
+        config["hotkey"] = choice.normalized
+        config["hotkeyLabel"] = choice.label
+        hotkeyLabel = choice.label
+        hotkeyError = nil
+        registerHotkey()
+
+        if hotkeyError != nil {
+            config = previousConfig
+            hotkeyLabel = previousLabel
+            hotkeyError = previousError
+            registerHotkey()
+            alert(
+                "Shortcut unavailable",
+                "macOS would not register \(choice.label). Myna kept \(previousLabel). Try another combination."
+            )
+            return
+        }
+
+        saveHotkey(choice)
+        refresh()
+        writeState()
+    }
+
+    private func saveHotkey(_ choice: ShortcutChoice) {
+        guard let homeURL = homeURL else { return }
+        let url = homeURL.appendingPathComponent("config.json")
+        var body: [String: Any] = [:]
+        if let data = try? Data(contentsOf: url),
+           let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            body = parsed
+        }
+        body["hotkey"] = choice.normalized
+        do {
+            let data = try JSONSerialization.data(withJSONObject: body, options: [.prettyPrinted, .sortedKeys])
+            try data.write(to: url, options: .atomic)
+        } catch {
+            alert("Could not save the shortcut", error.localizedDescription)
         }
     }
 
