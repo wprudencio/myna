@@ -17,7 +17,7 @@ const SOURCE = fileURLToPath(new URL("../native/menubar.swift", import.meta.url)
 const ICON_SOURCE = fileURLToPath(new URL("../assets/Myna.icns", import.meta.url));
 const BUNDLE_ID = "com.wprudencio.myna";
 
-function infoPlist() {
+export function infoPlist() {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -45,7 +45,7 @@ function infoPlist() {
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
   <key>LSMinimumSystemVersion</key>
-  <string>11.0</string>
+  <string>13.5</string>
   <key>NSMicrophoneUsageDescription</key>
   <string>Myna transcribes your speech locally when you use the dictation shortcut.</string>
 </dict>

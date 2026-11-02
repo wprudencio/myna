@@ -1,16 +1,13 @@
 {
-  "name": "myna-cli",
+  "name": "myna",
   "version": "1.0.0",
-  "description": "Push-to-talk dictation for the terminal and macOS menu bar, powered by Parakeet Redux and ONNX Runtime.",
+  "description": "A tiny macOS menu bar dictation app. Local speech recognition, powered by Parakeet Redux and ONNX Runtime.",
   "type": "module",
-  "bin": {
-    "myna": "bin/myna.js"
-  },
   "files": [
-    "bin",
     "src",
     "native",
     "assets",
+    "scripts",
     "README.md",
     "LICENSE"
   ],
@@ -22,15 +19,14 @@
     "parakeet",
     "macos",
     "menu-bar",
-    "tui",
     "clipboard",
     "onnx",
-    "push-to-talk"
+    "push-to-talk",
+    "local-first"
   ],
   "scripts": {
-    "start": "node bin/myna.js",
     "test": "node --test test/*.test.js",
-    "render": "node test/render.js"
+    "build": "node scripts/build-release.mjs"
   },
   "engines": {
     "node": ">=20.3"

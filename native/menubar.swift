@@ -40,6 +40,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     var config: [String: Any] = [:]
     var nodePath = ""
     var daemonScript = ""
+    var bundledHelperPath: String?
 
     var daemon: Process?
     var daemonStdin: Pipe?
@@ -71,6 +72,13 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
 
         writeState()
         startDaemon()
+
+        if !UserDefaults.standard.bool(forKey: "didWelcome") {
+            UserDefaults.standard.set(true, forKey: "didWelcome")
+            DispatchQueue.main.async { [weak self] in
+                self?.welcome()
+            }
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -78,16 +86,72 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func loadConfiguration() -> Bool {
+        let fileManager = FileManager.default
         let arguments = CommandLine.arguments
-        var configPath = FileManager.default.homeDirectoryForCurrentUser
+        var configPath = fileManager.homeDirectoryForCurrentUser
             .appendingPathComponent(".myna/menubar.json")
         if let index = arguments.firstIndex(of: "--config"), index + 1 < arguments.count {
             configPath = URL(fileURLWithPath: arguments[index + 1])
         }
 
+        var object: [String: Any] = [:]
+        if let data = try? Data(contentsOf: configPath),
+           let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            object = parsed
+        }
+
+        /* A distribution build carries its own Node runtime, application code,
+         * and precompiled microphone helper. Prefer those resources over any
+         * developer configuration in menubar.json. */
+        if let resources = Bundle.main.resourceURL {
+            let bundledNode = resources.appendingPathComponent("runtime/node")
+            let bundledDaemon = resources.appendingPathComponent("app/src/daemon.js")
+            if fileManager.fileExists(atPath: bundledNode.path),
+               fileManager.fileExists(atPath: bundledDaemon.path) {
+                let home = configPath.deletingLastPathComponent()
+                nodePath = bundledNode.path
+                daemonScript = bundledDaemon.path
+                homeURL = home
+                stateURL = home.appendingPathComponent("daemon.json")
+                logURL = home.appendingPathComponent("daemon.log")
+                try? fileManager.createDirectory(at: home, withIntermediateDirectories: true)
+
+                /* config.json is the source of truth for the shortcut. Ask the
+                 * bundled runtime to translate it into the Carbon key code and
+                 * label this process needs, then read it back. */
+                let appConfig = resources.appendingPathComponent("app/src/app-config.js")
+                if fileManager.fileExists(atPath: appConfig.path) {
+                    let refresh = Process()
+                    refresh.executableURL = bundledNode
+                    refresh.arguments = [appConfig.path, "--home", home.path]
+                    refresh.standardOutput = FileHandle.nullDevice
+                    refresh.standardError = FileHandle.nullDevice
+                    try? refresh.run()
+                    refresh.waitUntilExit()
+                    if let data = try? Data(contentsOf: configPath),
+                       let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                        object = parsed
+                    }
+                }
+
+                hotkeyLabel = object["hotkeyLabel"] as? String ?? "⌃⌥Space"
+                config = object
+
+                let helper = resources.appendingPathComponent("bin/myna-recorder")
+                if fileManager.fileExists(atPath: helper.path) {
+                    bundledHelperPath = helper.path
+                }
+
+                if let defaults = UserDefaults.standard.object(forKey: "sounds") as? Bool {
+                    soundsEnabled = defaults
+                } else {
+                    soundsEnabled = (object["sounds"] as? Bool) ?? true
+                }
+                return true
+            }
+        }
+
         guard
-            let data = try? Data(contentsOf: configPath),
-            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
             let node = object["node"] as? String,
             let daemon = object["daemon"] as? String,
             let home = object["home"] as? String
@@ -114,12 +178,12 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
             soundsEnabled = (object["sounds"] as? Bool) ?? true
         }
 
-        guard FileManager.default.fileExists(atPath: nodePath) else {
+        guard fileManager.fileExists(atPath: nodePath) else {
             alert("Myna could not start", "Node was not found at:\n\(nodePath)")
             NSApp.terminate(nil)
             return false
         }
-        guard FileManager.default.fileExists(atPath: daemonScript) else {
+        guard fileManager.fileExists(atPath: daemonScript) else {
             alert("Myna could not start", "The daemon was not found at:\n\(daemonScript)")
             NSApp.terminate(nil)
             return false
@@ -143,6 +207,21 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         box.messageText = title
         box.informativeText = message
         box.alertStyle = .warning
+        box.runModal()
+    }
+
+    private func welcome() {
+        NSApp.activate(ignoringOtherApps: true)
+        let box = NSAlert()
+        box.messageText = "Myna is in your menu bar"
+        box.informativeText = """
+        Press Control-Option-Space to start dictating. Press it again to stop.
+
+        The first launch downloads the speech model (about 363 MB) in the \
+        background. Audio and transcripts stay on this Mac.
+        """
+        box.alertStyle = .informational
+        box.addButton(withTitle: "Got it")
         box.runModal()
     }
 
@@ -439,6 +518,10 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         var environment = ProcessInfo.processInfo.environment
         let path = environment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin"
         environment["PATH"] = "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:\(path)"
+        if let helper = bundledHelperPath {
+            environment["MYNA_RECORDER_HELPER"] = helper
+        }
+        environment["MYNA_BUNDLED_APP"] = Bundle.main.bundlePath
         process.environment = environment
 
         let stdinPipe = Pipe()

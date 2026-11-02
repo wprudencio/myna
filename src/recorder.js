@@ -245,18 +245,29 @@ export class Recorder extends EventEmitter {
     }
 
     if (isMac) {
-      this.compileAbort = new AbortController();
-      try {
-        this.helperPath = await compileHelper({
-          binDir: this.binDir,
-          onStatus,
-          signal: this.compileAbort.signal,
-        });
-        this.mode = "swift";
-      } catch (error) {
-        this.compileError = error;
-      } finally {
-        this.compileAbort = null;
+      const bundled = process.env.MYNA_RECORDER_HELPER;
+      if (bundled) {
+        try {
+          await fs.access(bundled, fsConstants.X_OK);
+          this.helperPath = bundled;
+          this.mode = "swift";
+          this.log(`bundled microphone helper: ${bundled}`);
+        } catch {}
+      }
+      if (!this.helperPath) {
+        this.compileAbort = new AbortController();
+        try {
+          this.helperPath = await compileHelper({
+            binDir: this.binDir,
+            onStatus,
+            signal: this.compileAbort.signal,
+          });
+          this.mode = "swift";
+        } catch (error) {
+          this.compileError = error;
+        } finally {
+          this.compileAbort = null;
+        }
       }
     }
 
