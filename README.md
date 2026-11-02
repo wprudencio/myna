@@ -22,8 +22,6 @@
   <sub>Universal · macOS 13.5+ · one 110 MB DMG</sub>
 </p>
 
-![A colorful Brazilian macaw in pixel art, perched by the sea at sunset](assets/myna-hero.png)
-
 ## Install
 
 1. Open the DMG and drag **Myna** into **Applications**.
