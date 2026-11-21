@@ -145,6 +145,7 @@ async function copyRuntime(target, nodeBinary) {
     "hotkey.js",
     "model.js",
     "recorder.js",
+    "typer.js",
     "util.js",
   ];
   for (const file of runtimeFiles) {
