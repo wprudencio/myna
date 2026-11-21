@@ -1,12 +1,13 @@
 {
   "name": "myna",
-  "version": "1.2.2",
+  "version": "1.3.0",
   "description": "A tiny macOS menu bar dictation app. Local speech recognition, powered by Parakeet Redux and ONNX Runtime.",
   "type": "module",
   "files": [
     "src",
     "native",
     "assets",
+    "bin",
     "scripts",
     "README.md",
     "LICENSE"
@@ -26,7 +27,11 @@
   ],
   "scripts": {
     "test": "node --test test/*.test.js",
-    "build": "node scripts/build-release.mjs"
+    "build": "node scripts/build-release.mjs",
+    "build:linux": "node scripts/build-linux.mjs"
+  },
+  "bin": {
+    "myna": "bin/myna.js"
   },
   "engines": {
     "node": ">=20.3"

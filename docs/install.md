@@ -16,8 +16,8 @@ There are two downloads. Pick the one for your Mac:
 
 | Mac | File |
 | --- | --- |
-| Apple Silicon (M1–M4) | `Myna-1.2.2-arm64.dmg` |
-| Intel | `Myna-1.2.2-x64.dmg` |
+| Apple Silicon (M1–M4) | `Myna-1.3.0-arm64.dmg` |
+| Intel | `Myna-1.3.0-x64.dmg` |
 
 Not sure? Open **Apple menu → About This Mac**. **Chip** means Apple Silicon;
 **Processor** means Intel.
@@ -86,12 +86,13 @@ Myna uses the current default input device. Change it in
 The default **Copy to clipboard** mode needs no extra permission.
 
 If you choose **After dictation → Type at cursor**, macOS asks for
-**Accessibility** access. This lets Myna press **⌘V** for you.
+**Accessibility** access. This lets Myna type the transcript for you.
 
 **System Settings → Privacy & Security → Accessibility → Myna**
 
-The transcript is still copied if the permission is missing, so you can always
-paste it manually. The Myna menu has **Open Accessibility Settings…** for this.
+Without the permission nothing is typed, but the transcript stays in Myna's
+menu — **Copy Last Transcript** puts it on the clipboard. The Myna menu has
+**Open Accessibility Settings…** for this.
 
 ## Updating
 

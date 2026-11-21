@@ -196,6 +196,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
     var timer: Timer?
     var crestPhase = 0
     var animationTick = 0
+    var markCache: [String: NSImage] = [:]
 
     var homeURL: URL!
     var stateURL: URL!
@@ -419,6 +420,11 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
      * Keep the geometry in sync with scripts/render-icon.swift, which renders
      * the same mark to the PNG and icns assets. */
     private func mynaMark(color: NSColor?, phase: Int = 0) -> NSImage {
+        /* The crest animates at 4 fps; cache the rendered images instead of
+         * redrawing on every tick. */
+        let key = "\(markTag(color))#\(phase % 4)"
+        if let cached = markCache[key] { return cached }
+
         let image = NSImage(size: NSSize(width: 18, height: 18))
         image.lockFocus()
         defer { image.unlockFocus() }
@@ -465,7 +471,16 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
         }
 
         image.isTemplate = color == nil
+        markCache[key] = image
         return image
+    }
+
+    private func markTag(_ color: NSColor?) -> String {
+        guard let color = color else { return "template" }
+        if color == .systemOrange { return "orange" }
+        if color == .systemRed { return "red" }
+        if color == .systemGreen { return "green" }
+        return color.description
     }
 
     private func statusTitle() -> String {
@@ -796,6 +811,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
         daemonLogHandle = logHandle
         readBuffer.removeAll()
         readDaemon(stdoutPipe)
+        sendOutputMode()
         status = "starting"
         detail = ""
         refresh()
@@ -866,7 +882,11 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
                 lastText = text
                 flashUntil = Date().addingTimeInterval(1.6)
                 play(pop)
-                copyTextToPasteboard(text)
+                /* Clipboard mode copies now. Type mode types at the cursor and
+                 * leaves the clipboard exactly as the user left it. */
+                if outputMode == "clipboard" {
+                    copyTextToPasteboard(text)
+                }
                 flashWork?.cancel()
                 let work = DispatchWorkItem { [weak self] in
                     self?.flashUntil = nil
@@ -875,9 +895,9 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
                 flashWork = work
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.7, execute: work)
                 if outputMode == "type" {
-                    let textToPaste = text
+                    let textToType = text
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) { [weak self] in
-                        self?.pasteAtCursor(textToPaste)
+                        self?.typeAtCursor(textToType)
                     }
                 }
                 refresh()
@@ -897,6 +917,12 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
         } catch {
             daemonExited()
         }
+    }
+
+    /* Tell the daemon which output mode is active, so it can leave the
+     * clipboard alone in type mode. Sent at spawn time and on every change. */
+    private func sendOutputMode() {
+        send(["type": "output", "mode": outputMode])
     }
 
     private func daemonExited() {
@@ -949,25 +975,63 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
         return nil
     }
 
-    private func pasteAtCursor(_ text: String) {
+    /* Type the transcript as Unicode keyboard events. The clipboard is never
+     * touched. Each event carries at most ~20 UTF-16 units, so the text goes
+     * out in small chunks; a Return key press separates lines. */
+    private func typeAtCursor(_ text: String) {
         guard outputMode == "type" else { return }
         guard AXIsProcessTrusted() else {
             explainAccessibilityIfNeeded()
             return
         }
-        guard NSPasteboard.general.string(forType: .string) == text else { return }
 
         let source = CGEventSource(stateID: .combinedSessionState)
-        guard
-            let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true),
-            let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
-        else {
-            return
-        }
-        keyDown.flags = .maskCommand
-        keyUp.flags = .maskCommand
+        let pid = currentPasteTarget()
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        guard !lines.isEmpty else { return }
 
-        if let pid = currentPasteTarget() {
+        /* Off the main thread: a long transcript is many tiny events with
+         * short pauses, and the status item should stay responsive. */
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            for (index, line) in lines.enumerated() {
+                if index > 0 {
+                    guard self?.postKey(0x24, source: source, pid: pid) == true else { return }
+                    Thread.sleep(forTimeInterval: 0.01)
+                }
+                for chunk in Self.utf16Chunks(line) {
+                    guard self?.postUnicode(chunk, source: source, pid: pid) == true else { return }
+                    Thread.sleep(forTimeInterval: 0.012)
+                }
+            }
+        }
+    }
+
+    private func postUnicode(_ string: String, source: CGEventSource?, pid: pid_t?) -> Bool {
+        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
+        else { return false }
+        let units = Array(string.utf16)
+        units.withUnsafeBufferPointer { buffer in
+            keyDown.keyboardSetUnicodeString(
+                stringLength: buffer.count,
+                unicodeString: buffer.baseAddress
+            )
+        }
+        if let pid = pid {
+            keyDown.postToPid(pid)
+            keyUp.postToPid(pid)
+        } else {
+            keyDown.post(tap: .cghidEventTap)
+            keyUp.post(tap: .cghidEventTap)
+        }
+        return true
+    }
+
+    private func postKey(_ code: CGKeyCode, source: CGEventSource?, pid: pid_t?) -> Bool {
+        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: false)
+        else { return false }
+        if let pid = pid {
             keyDown.postToPid(pid)
             Thread.sleep(forTimeInterval: 0.01)
             keyUp.postToPid(pid)
@@ -976,6 +1040,26 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
             Thread.sleep(forTimeInterval: 0.01)
             keyUp.post(tap: .cghidEventTap)
         }
+        return true
+    }
+
+    /* Chunks of at most `limit` UTF-16 units, never splitting a surrogate pair. */
+    private static func utf16Chunks(_ text: String, limit: Int = 20) -> [String] {
+        var chunks: [String] = []
+        var current = ""
+        var width = 0
+        for scalar in text.unicodeScalars {
+            let cost = scalar.value > 0xFFFF ? 2 : 1
+            if width + cost > limit, !current.isEmpty {
+                chunks.append(current)
+                current = ""
+                width = 0
+            }
+            current.unicodeScalars.append(scalar)
+            width += cost
+        }
+        if !current.isEmpty { chunks.append(String(current)) }
+        return chunks
     }
 
     private func explainAccessibilityIfNeeded() {
@@ -989,7 +1073,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
         box.informativeText = """
         To type the transcript for you, Myna needs Accessibility permission.
 
-        The text is already on your clipboard, so you can paste it with ⌘V now.
+        The transcript is kept in Myna's menu — use “Copy Last Transcript” to \
+        paste it yourself. Your clipboard is untouched.
 
         Enable Myna in System Settings → Privacy & Security → Accessibility, \
         then choose “Type at cursor” again.
@@ -1088,12 +1173,14 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
     @objc private func useClipboardMode() {
         outputMode = "clipboard"
         UserDefaults.standard.set(outputMode, forKey: "outputMode")
+        sendOutputMode()
         rebuildMenu()
     }
 
     @objc private func useTypeMode() {
         outputMode = "type"
         UserDefaults.standard.set(outputMode, forKey: "outputMode")
+        sendOutputMode()
         rebuildMenu()
 
         if !AXIsProcessTrusted() {

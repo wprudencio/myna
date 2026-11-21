@@ -7,8 +7,9 @@
  * toggle  send SIGUSR1 to the daemon (also handy as a second shortcut)
  */
 
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { promises as fs } from "node:fs";
+import { closeSync, openSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   daemonPaths,
@@ -19,6 +20,7 @@ import {
   readState,
   recentLog,
   removeState,
+  waitForState,
   writeConfig,
   writeMenubarConfig,
 } from "./daemon-config.js";
@@ -29,25 +31,33 @@ import { resolveHome } from "./model.js";
 const DAEMON_SCRIPT = fileURLToPath(new URL("./daemon.js", import.meta.url));
 
 function usage() {
-  return `myna daemon — hidden push-to-talk daemon
+  return `myna daemon — background push-to-talk daemon
 
 Usage
-  myna daemon start [options]    start the menu bar app and daemon
-  myna daemon stop               stop them
+  myna daemon start [options]    start the daemon
+                                  macOS: menu bar icon + global shortcut
+                                  Linux: headless; bind a desktop shortcut
+                                  to \`myna daemon toggle\`
+  myna daemon stop               stop the daemon
   myna daemon status             show status
   myna daemon toggle             toggle recording (also a test hook)
 
 Options for start
   --home <dir>        cache/config directory (default ~/.myna)
-  --hotkey <keys>     default ctrl+alt+space
+  --hotkey <keys>     default ctrl+alt+space (macOS shortcut label)
   --warm <seconds>    keep the microphone warm after a dictation (default 120;
                       0 = cold, -1 = always)
   --sounds            enable the start/finish sounds
   --no-sounds         disable sounds
   --recorder <cmd>    custom recorder, s16le 16 kHz mono on stdout
+  --output <mode>     clipboard (default) or type — with type, the transcript
+                      is typed at the cursor and the clipboard is untouched
 
-The daemon lives in the menu bar after start; the terminal can be closed.
-Microphone access is requested by the menu bar app on first use.`;
+macOS: the daemon lives in the menu bar; the terminal can be closed and the
+shortcut works everywhere. Linux: the daemon is headless — bind your desktop
+environment's shortcut (GNOME/KDE custom shortcuts, sway bindsym, Hyprland
+bindl) to \`myna daemon toggle\`. Typing uses wtype (Wayland), xdotool (X11),
+or ydotool; recording uses arecord, SoX, or ffmpeg.`;
 }
 
 function parseDaemonArgs(argv) {
@@ -57,6 +67,7 @@ function parseDaemonArgs(argv) {
     sounds: null,
     warm: null,
     recorder: null,
+    output: null,
     help: false,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -82,9 +93,14 @@ function parseDaemonArgs(argv) {
     else if (arg === "--no-sounds") options.sounds = false;
     else if (arg === "--recorder") options.recorder = value();
     else if (arg.startsWith("--recorder=")) options.recorder = arg.slice(11);
+    else if (arg === "--output") options.output = value();
+    else if (arg.startsWith("--output=")) options.output = arg.slice(9);
     else if (arg === "--help" || arg === "-h") options.help = true;
     else if (arg === "--version" || arg === "-v") options.version = true;
     else throw new Error(`unknown option ${arg}`);
+  }
+  if (options.output !== null && options.output !== "clipboard" && options.output !== "type") {
+    throw new Error("--output must be clipboard or type");
   }
   return options;
 }
@@ -136,6 +152,7 @@ async function start(options, paths) {
   if (options.sounds !== null) config.sounds = options.sounds;
   if (options.warm !== null) config.warmSeconds = options.warm;
   if (options.recorder !== null) config.recorder = options.recorder;
+  if (options.output !== null) config.output = options.output;
   config = normalizeConfig(config);
   await writeConfig(paths, config);
 
@@ -145,13 +162,19 @@ async function start(options, paths) {
     console.log(`myna daemon is already running`);
     console.log(`  status    ${current.state.status ?? "unknown"}`);
     console.log(`  shortcut  ${parsed.label}`);
-    if (options.hotkey || options.sounds !== null || options.warm !== null) {
+    if (config.output === "type") console.log(`  output    type at cursor`);
+    if (options.hotkey || options.sounds !== null || options.warm !== null || options.output !== null) {
       console.log(`  note      stop and start to apply the new settings`);
     }
     return 0;
   }
   await cleanupStale(paths, current.state);
 
+  if (process.platform === "darwin") return await startMenubar(paths, config, parsed, files);
+  return await startHeadless(paths, config, parsed, files);
+}
+
+async function startMenubar(paths, config, parsed, files) {
   const bundle = await ensureMenubarApp({
     bundlePath: files.bundle,
     onStatus: (line) => process.stderr.write(`myna: ${line}\n`),
@@ -197,6 +220,48 @@ async function start(options, paths) {
   console.log(`  menu bar  ${bundle}`);
   console.log(`  log       ${files.log}`);
   console.log(`\nThe terminal can be closed. The shortcut works while the menu bar icon is visible.`);
+  return 0;
+}
+
+async function startHeadless(paths, config, parsed, files) {
+  await fs.mkdir(paths.root, { recursive: true });
+
+  /* Detached: the daemon owns its own session, logs to the daemon log, and
+   * keeps running after the terminal closes. Its stdin is /dev/null — the
+   * daemon skips the stdin control channel when it runs standalone. */
+  let logFd = null;
+  try {
+    logFd = openSync(files.log, "a");
+  } catch {}
+  const child = spawn(process.execPath, [DAEMON_SCRIPT, "--home", paths.root], {
+    detached: true,
+    stdio: ["ignore", "ignore", logFd ?? "ignore"],
+  });
+  child.unref();
+  if (logFd !== null) {
+    try {
+      closeSync(logFd);
+    } catch {}
+  }
+
+  const state = await waitForState(
+    paths,
+    (candidate) => isProcessAlive(Number(candidate?.daemonPid)),
+    15_000
+  );
+  if (!state) {
+    const log = await recentLog(paths, 10);
+    throw new Error(`the daemon did not start${log ? `\n\n${log}` : ""}`);
+  }
+
+  console.log(`myna daemon running (headless)`);
+  console.log(`  status    ${state.status ?? "starting"}`);
+  console.log(`  mic       ${state.mic ?? "cold"}`);
+  console.log(`  log       ${files.log}`);
+  if (config.output === "type") console.log(`  output    type at cursor (wtype/xdotool/ydotool)`);
+  console.log(`\nBind your desktop shortcut (label: ${parsed.label}) to:`);
+  console.log(`  myna daemon toggle`);
+  console.log(`If myna is not on PATH, use the full path to the myna launcher.`);
   return 0;
 }
 
@@ -249,7 +314,7 @@ async function status(paths) {
   console.log(`  shortcut  ${state.hotkey || parseHotkey(DEFAULT_CONFIG.hotkey).label}`);
   if (state.hotkeyError) console.log(`  shortcut! ${state.hotkeyError}`);
   console.log(`  since     ${formatUptime(state.startedAt)}`);
-  if (state.appPid) console.log(`  ui pid    ${state.appPid}`);
+  if (state.appPid && state.appPid !== state.daemonPid) console.log(`  ui pid    ${state.appPid}`);
   if (state.daemonPid) console.log(`  daemon    ${state.daemonPid}`);
   if (!current.running && current.daemonAlive) {
     console.log("  note      the menu bar app is gone; stop will clean this up");

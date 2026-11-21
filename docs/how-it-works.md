@@ -68,16 +68,18 @@ dictation.
 
 ## Output modes
 
-The daemon always writes the transcript to the clipboard. The Swift host then
-decides what to do next:
+The output mode decides where the transcript goes:
 
-- **Copy to clipboard** — stop there. You paste with ⌘V.
-- **Type at cursor** — send a synthetic **⌘V** with `CGEvent.postToPid` to the app
-  that was in front when recording started (or the current frontmost app).
+- **Copy to clipboard** — the transcript is written to the pasteboard. You
+  paste with ⌘V.
+- **Type at cursor** — the text is sent as Unicode keystrokes (`CGEvent` with
+  `keyboardSetUnicodeString`, in ~20-unit chunks) to the app that was in front
+  when recording started, or the current frontmost app. The clipboard is
+  never touched.
 
 Sending synthetic keystrokes to another app requires Accessibility permission.
-Without it, Myna falls back to the clipboard and explains how to enable it. It
-never reads your keystrokes or other apps' contents.
+Without it, Myna keeps the transcript in its menu and explains how to enable
+it. It never reads your keystrokes or other apps' contents.
 
 ## The model
 

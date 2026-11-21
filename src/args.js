@@ -163,11 +163,12 @@ Keys
   q / ctrl-c       quit
 
 Background (terminal can be closed)
-  myna daemon start     menu bar icon + global shortcut (⌃⌥Space)
+  myna daemon start     start the daemon (macOS: menu bar + ⌃⌥Space;
+                        Linux: headless — bind a shortcut to: myna daemon toggle)
   myna daemon status    show daemon state
   myna daemon toggle    toggle recording from the CLI
   myna daemon stop      stop the daemon
-  myna daemon --help    daemon options
+  myna daemon --help    daemon options (incl. --output clipboard|type)
 
 Options
   --home <dir>       cache and history (default ~/.myna)
@@ -188,7 +189,8 @@ Options
   --version, -v      print the version
 
 The first run downloads Parakeet Redux (~363 MB) into ~/.myna/models.
-On macOS, a tiny microphone helper is compiled once with swiftc.
+On macOS, a tiny microphone helper is compiled once with swiftc. On Linux,
+recording uses arecord/SoX/ffmpeg and typing uses wtype/xdotool/ydotool.
 Audio never leaves this machine.
 
 Terminals with hold-to-talk: Ghostty, kitty, WezTerm and iTerm2 report bare

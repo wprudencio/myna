@@ -9,7 +9,6 @@
  */
 
 import { spawn, spawnSync } from "node:child_process";
-import { isMac, isWindows } from "./util.js";
 
 /* Ordered tools for the session described by `env`. Pure; unit tested. */
 export function typerCandidates(env = process.env) {
@@ -87,10 +86,13 @@ function runOnce(command, args, timeoutMs = 30_000) {
  * The runner and the tool lookup are injectable so the tests can drive the
  * line-splitting logic without any real typing tool installed.
  */
-export async function typeText(text, { env = process.env, which = whichTool, run = runOnce, log = () => {} } = {}) {
-  if (isMac || isWindows) return { ok: false, reason: "unsupported platform" };
+export async function typeText(
+  text,
+  { platform = process.platform, env = process.env, which = whichTool, run = runOnce, log = () => {} } = {}
+) {
   const source = String(text ?? "");
   if (!source.trim()) return { ok: false, reason: "empty text" };
+  if (platform === "darwin" || platform === "win32") return { ok: false, reason: "unsupported platform" };
 
   const lines = source.split("\n");
   const candidates = typerCandidates(env);

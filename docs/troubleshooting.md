@@ -64,10 +64,11 @@ The menu has **After dictation → Open Accessibility Settings…** for this. If
 was already enabled there but a new build still cannot paste, remove Myna from the
 list with the **−** button, add `/Applications/Myna.app` again, and reopen Myna.
 
-Even without permission, the transcript is copied. Paste it with **⌘V**.
+Without permission, nothing is typed. The transcript stays in Myna's menu —
+use **Copy Last Transcript** to get it onto the clipboard yourself.
 
-Note that **Type at cursor** sends **⌘V**, so it works in apps that support the
-standard paste shortcut. Secure input fields may ignore synthetic keystrokes.
+**Type at cursor** sends real keystrokes, so it works in any text field that
+accepts typing. Secure input fields may ignore synthetic keystrokes.
 
 ## Nothing is transcribed
 

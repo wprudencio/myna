@@ -412,7 +412,13 @@ export class Recorder extends EventEmitter {
     if (!usable) return;
 
     const samples = new Int16Array(usable / 2);
-    for (let i = 0; i < samples.length; i++) samples[i] = joined.readInt16LE(i * 2);
+    /* Reinterpret the bytes as s16le and copy natively instead of walking a
+     * per-sample readInt16LE loop. All supported platforms are LE. */
+    if (joined.byteOffset % 2 === 0) {
+      samples.set(new Int16Array(joined.buffer, joined.byteOffset, samples.length));
+    } else {
+      for (let i = 0; i < samples.length; i++) samples[i] = joined.readInt16LE(i * 2);
+    }
 
     if (!this.ready) {
       this.ready = true;

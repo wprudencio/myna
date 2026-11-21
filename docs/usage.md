@@ -23,9 +23,9 @@ Open the Myna menu and look at **After dictation**:
 
 - **Copy to clipboard** — the transcript is copied and you paste it with **⌘V**.
   This is the default and needs no special permission.
-- **Type at cursor** — Myna puts the transcript on the clipboard and presses
-  **⌘V** for you, so the text appears in the app you were using. This requires
-  **Accessibility** permission.
+- **Type at cursor** — Myna types the transcript where your cursor is, as if
+  you pressed the keys yourself. Your clipboard is left untouched. This
+  requires **Accessibility** permission.
 
 The choice is remembered. To use **Type at cursor**:
 
@@ -35,10 +35,11 @@ The choice is remembered. To use **Type at cursor**:
    Settings…** and enable **Myna** in
    **System Settings → Privacy & Security → Accessibility**.
 
-If permission is missing, Myna still copies the transcript and shows a reminder.
-The text is never lost; paste it with **⌘V**.
+If permission is missing, Myna shows a reminder and keeps the transcript in its
+menu — choose **Copy Last Transcript** to put it on the clipboard yourself.
 
-Myna does not read the clipboard. It only writes the transcript to it.
+Myna never reads the clipboard. It writes the transcript to it only in
+**Copy to clipboard** mode; **Type at cursor** never touches it.
 
 ## Menu bar states
 

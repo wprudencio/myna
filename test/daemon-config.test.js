@@ -32,6 +32,11 @@ test("config defaults and normalization", () => {
   assert.equal(config.sounds, false);
   assert.equal(config.warmSeconds, -1);
   assert.equal(config.recorder, "cat mic.raw");
+  assert.equal(config.output, "clipboard");
+
+  assert.equal(normalizeConfig().output, "clipboard");
+  assert.equal(normalizeConfig({ output: "type" }).output, "type");
+  assert.equal(normalizeConfig({ output: "weird" }).output, "clipboard");
 
   assert.throws(() => normalizeConfig({ hotkey: "shift+space" }), /Shift alone|unsafe/);
 });

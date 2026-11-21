@@ -9,10 +9,12 @@
 import readline from "node:readline";
 import { RecognizerClient } from "./asr-client.js";
 import { copyToClipboard } from "./clipboard.js";
-import { readConfig } from "./daemon-config.js";
+import { daemonPaths, readConfig, removeState, writeJsonAtomic } from "./daemon-config.js";
 import { addHistory, HISTORY_LIMIT, loadHistory, saveHistory } from "./history.js";
+import { parseHotkey } from "./hotkey.js";
 import { ensureModel, resolveHome } from "./model.js";
 import { Recorder, RecorderError } from "./recorder.js";
+import { typeText } from "./typer.js";
 import { int16ToFloat32, peak } from "./util.js";
 
 const SR = 16_000;
@@ -37,8 +39,15 @@ function parseArgs(argv) {
 
 const args = parseArgs(process.argv.slice(2));
 const paths = resolveHome(args.home);
+const files = daemonPaths(paths);
 
-let config = { hotkey: "ctrl+alt+space", sounds: true, warmSeconds: 120, recorder: null };
+/* The menu bar host sets MYNA_BUNDLED_APP when it spawns us. On any other
+ * setup (Linux, or running the daemon by hand) there is no host: this process
+ * runs headless, publishes its own state file, and answers SIGUSR1. */
+const standalone = !process.env.MYNA_BUNDLED_APP;
+const bootAt = Date.now();
+
+let config = { hotkey: "ctrl+alt+space", sounds: true, warmSeconds: 120, recorder: null, output: "clipboard" };
 try {
   config = await readConfig(paths);
 } catch (error) {
@@ -78,6 +87,22 @@ function sendStatus(state, extra = {}) {
   phase = state;
   if (extra.mic) mic = extra.mic;
   send({ type: "status", state, mic, ...extra });
+  if (standalone) writeDaemonState(state, extra);
+}
+
+/* Headless mode has no menu bar host to write daemon.json, so the daemon
+ * publishes its own state for `myna daemon status/toggle/stop`. */
+function writeDaemonState(state, extra = {}) {
+  const body = {
+    appPid: process.pid,
+    daemonPid: process.pid,
+    status: state,
+    mic,
+    hotkey: parseHotkey(config.hotkey).label,
+    startedAt: bootAt,
+  };
+  if (state === "error" && extra.message) body.message = extra.message;
+  writeJsonAtomic(files.state, body).catch(() => {});
 }
 
 function log(...parts) {
@@ -224,15 +249,16 @@ async function initRecorder() {
 
 function onAudio(samples) {
   if (shuttingDown) return;
-  ring.push({ samples, at: Date.now() });
+  /* One peak scan per chunk; the ring keeps it for the pre-roll seed. */
+  const chunkPeak = peak(samples) / 32768;
+  ring.push({ samples, at: Date.now(), peak: chunkPeak });
   ringSamples += samples.length;
   const max = RING_SECONDS * SR;
   while (ring.length && ringSamples > max) ringSamples -= ring.shift().samples.length;
 
   if (phase === "recording" && recording) {
     recording.chunks.push(samples);
-    const value = peak(samples) / 32768;
-    if (value > recording.peak) recording.peak = value;
+    if (chunkPeak > recording.peak) recording.peak = chunkPeak;
   }
 }
 
@@ -241,8 +267,7 @@ function seedRecording(rec, preRollMs) {
   for (const item of ring) {
     if (item.at < cutoff) continue;
     rec.chunks.push(item.samples);
-    const value = peak(item.samples) / 32768;
-    if (value > rec.peak) rec.peak = value;
+    if (item.peak > rec.peak) rec.peak = item.peak;
   }
 }
 
@@ -448,8 +473,27 @@ async function transcribe(pcm) {
     history = addHistory(history, entry, HISTORY_LIMIT);
     saveHistory(paths.history, history).catch((error) => log("could not save history", error));
 
-    const copied = await copyToClipboard(text);
-    if (!copied.ok) log("pbcopy failed; the menu bar will copy instead");
+    if (config.output === "type") {
+      if (standalone) {
+        /* Headless: type here, without touching the clipboard. If typing is
+         * unavailable, fall back to copying rather than losing the text. */
+        const typed = await typeText(text, { log: (line) => log(line) });
+        if (typed.ok) {
+          log(`typed with ${typed.command}`);
+        } else {
+          log(`typing failed (${typed.reason}); copying to the clipboard instead`);
+          const copied = await copyToClipboard(text);
+          if (!copied.ok) log("the clipboard was unavailable too; the text is in the history");
+        }
+      } else {
+        /* The menu bar host types the transcript at the cursor; the
+         * clipboard is left exactly as the user had it. */
+        log("type mode; the host will type the transcript");
+      }
+    } else {
+      const copied = await copyToClipboard(text);
+      if (!copied.ok) log("clipboard copy failed; the menu bar will copy instead");
+    }
 
     send({ type: "last", text, audioSec: result.audioSec, ms: result.totalMs });
     sendStatus("idle", { mic, detail: "" });
@@ -504,6 +548,7 @@ function shutdown() {
   warmTimer = null;
   if (maxTimer) clearTimeout(maxTimer);
   maxTimer = null;
+  if (standalone) removeState(paths);
   modelAbort?.abort();
   recorder?.killNow();
   recognizer?.terminate();
@@ -514,6 +559,7 @@ function shutdown() {
 /* ------------------------------------------------------------------- boot */
 
 history = config.history === false ? [] : await loadHistory(paths.history);
+if (standalone) writeDaemonState("starting");
 
 process.on("SIGUSR1", () => toggle());
 process.on("SIGTERM", shutdown);
@@ -529,21 +575,31 @@ process.on("unhandledRejection", (error) => {
   log("unhandled rejection", error);
 });
 
-const input = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
-input.on("line", (line) => {
-  if (!line.trim()) return;
-  let message;
-  try {
-    message = JSON.parse(line);
-  } catch {
-    return;
-  }
-  if (message.type === "toggle") toggle();
-  else if (message.type === "releaseMic") releaseMicrophone();
-  else if (message.type === "shutdown") shutdown();
-});
-input.on("close", shutdown);
-process.stdin.on("end", shutdown);
+/* The menu bar host drives us over stdin. Headless, stdin is /dev/null and
+ * its EOF would end us immediately — control comes via SIGUSR1/SIGTERM. */
+if (!standalone) {
+  const input = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
+  input.on("line", (line) => {
+    if (!line.trim()) return;
+    let message;
+    try {
+      message = JSON.parse(line);
+    } catch {
+      return;
+    }
+    if (message.type === "toggle") toggle();
+    else if (message.type === "releaseMic") releaseMicrophone();
+    else if (message.type === "shutdown") shutdown();
+    else if (message.type === "output") {
+      if (message.mode === "type" || message.mode === "clipboard") {
+        config.output = message.mode;
+        log(`output mode set to ${message.mode}`);
+      }
+    }
+  });
+  input.on("close", shutdown);
+  process.stdin.on("end", shutdown);
+}
 
 log(`ready · home=${paths.root} · warm=${warmSeconds}s · recorder=${config.recorder ?? "default"}`);
 init().catch((error) => {
