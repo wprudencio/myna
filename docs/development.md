@@ -53,9 +53,9 @@ Outputs:
 
 - `dist/Myna-arm64.app` — self-contained Apple Silicon app
 - `dist/Myna-x64.app` — self-contained Intel app
-- `dist/Myna-1.2.1-arm64.dmg` — Apple Silicon disk image
-- `dist/Myna-1.2.1-x64.dmg` — Intel disk image
-- `dist/Myna-1.2.1-*.dmg.sha256` — checksums
+- `dist/Myna-1.2.2-arm64.dmg` — Apple Silicon disk image
+- `dist/Myna-1.2.2-x64.dmg` — Intel disk image
+- `dist/Myna-1.2.2-*.dmg.sha256` — checksums
 
 The script:
 
@@ -92,6 +92,7 @@ MYNA_NODE_BINARY=/path/to/universal/node npm run build
 | `src/model.js` | Resumeable Hugging Face download |
 | `src/app-config.js` | Turns `config.json` into the menu bar hotkey |
 | `scripts/build-release.mjs` | Two-architecture app and DMG builder |
+| `scripts/render-icon.swift` | Renders the brand mark to the PNG and icns assets |
 | `test/` | Unit, snapshot, and FIFO integration tests |
 
 The terminal renderer in `src/tui.js` is a development harness used by the
@@ -136,9 +137,9 @@ For a one-click public release you need an Apple Developer ID and notarization:
 
 ```bash
 for arch in arm64 x64; do
-  xcrun notarytool submit "dist/Myna-1.2.1-$arch.dmg" \
+  xcrun notarytool submit "dist/Myna-1.2.2-$arch.dmg" \
     --keychain-profile myna-notary --wait
-  xcrun stapler staple "dist/Myna-1.2.1-$arch.dmg"
+  xcrun stapler staple "dist/Myna-1.2.2-$arch.dmg"
 done
 ```
 
@@ -149,7 +150,7 @@ Keep the Developer ID private key and notary credentials out of the repository.
 - [ ] `npm test` passes
 - [ ] `npm run build` produces both DMGs and both SHA-256 files
 - [ ] `codesign --verify --deep --strict dist/Myna-arm64.app dist/Myna-x64.app`
-- [ ] `hdiutil verify dist/Myna-1.2.1-arm64.dmg dist/Myna-1.2.1-x64.dmg`
+- [ ] `hdiutil verify dist/Myna-1.2.2-arm64.dmg dist/Myna-1.2.2-x64.dmg`
 - [ ] launch the app for this Mac, confirm the menu bar bird, model load, and a
       dictation in **Copy to clipboard** mode
 - [ ] grant Accessibility, select **Type at cursor**, and confirm a dictation

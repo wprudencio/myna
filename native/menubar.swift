@@ -414,6 +414,10 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
         menu.autoenablesItems = false
     }
 
+    /* The Myna mark: a bird head in profile with three sound bars rising from
+     * the crown. Drawn on an 18×18 grid, AppKit coordinates (y grows up).
+     * Keep the geometry in sync with scripts/render-icon.swift, which renders
+     * the same mark to the PNG and icns assets. */
     private func mynaMark(color: NSColor?, phase: Int = 0) -> NSImage {
         let image = NSImage(size: NSSize(width: 18, height: 18))
         image.lockFocus()
@@ -421,35 +425,42 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
 
         (color ?? .black).setFill()
 
-        let head = NSBezierPath(ovalIn: NSRect(x: 3.1, y: 3.9, width: 10.3, height: 10.3))
+        /* Head: circle centered on (8.0, 8.6). */
+        let head = NSBezierPath(ovalIn: NSRect(x: 3.0, y: 3.6, width: 10.0, height: 10.0))
         head.fill()
 
+        /* Beak: tapered wedge with its base chord buried inside the head, so
+         * the junction stays solid at menu bar sizes. The tip sits slightly
+         * above the head's midline. */
         let beak = NSBezierPath()
-        beak.move(to: NSPoint(x: 11.7, y: 8.7))
-        beak.line(to: NSPoint(x: 17.1, y: 9.5))
-        beak.line(to: NSPoint(x: 12.1, y: 11.2))
+        beak.move(to: NSPoint(x: 11.3, y: 10.7))
+        beak.line(to: NSPoint(x: 17.0, y: 9.1))
+        beak.line(to: NSPoint(x: 11.3, y: 6.5))
         beak.close()
         beak.fill()
 
+        /* Crest: three sound bars, evenly spaced over the crown. Phase 0 is
+         * the symmetric resting pose used for the static brand art. */
         let patterns = [
-            [3.1, 4.8, 2.4],
-            [4.7, 2.4, 3.9],
-            [2.5, 3.8, 5.0],
-            [3.9, 3.1, 2.5],
+            [3.0, 4.4, 3.0],
+            [4.4, 3.2, 4.0],
+            [3.2, 4.4, 2.6],
+            [4.2, 2.8, 3.8],
         ]
         let bars = patterns[phase % patterns.count]
         for (index, height) in bars.enumerated() {
             let bar = NSBezierPath(
-                roundedRect: NSRect(x: 4.3 + CGFloat(index) * 2.6, y: 13.0, width: 1.5, height: height),
-                xRadius: 0.75,
-                yRadius: 0.75
+                roundedRect: NSRect(x: 4.6 + CGFloat(index) * 2.6, y: 12.5, width: 1.6, height: height),
+                xRadius: 0.8,
+                yRadius: 0.8
             )
             bar.fill()
         }
 
+        /* Eye: clear a hole up and forward of the head's center. */
         if let context = NSGraphicsContext.current {
             context.compositingOperation = .clear
-            NSBezierPath(ovalIn: NSRect(x: 7.7, y: 9.0, width: 1.8, height: 1.8)).fill()
+            NSBezierPath(ovalIn: NSRect(x: 8.5, y: 8.9, width: 1.8, height: 1.8)).fill()
             context.compositingOperation = .sourceOver
         }
 

@@ -16,8 +16,8 @@ There are two downloads. Pick the one for your Mac:
 
 | Mac | File |
 | --- | --- |
-| Apple Silicon (M1–M4) | `Myna-1.2.1-arm64.dmg` |
-| Intel | `Myna-1.2.1-x64.dmg` |
+| Apple Silicon (M1–M4) | `Myna-1.2.2-arm64.dmg` |
+| Intel | `Myna-1.2.2-x64.dmg` |
 
 Not sure? Open **Apple menu → About This Mac**. **Chip** means Apple Silicon;
 **Processor** means Intel.

@@ -1,5 +1,6 @@
 node_modules/
 dist/
+assets/Myna.iconset/
 .DS_Store
 *.log
 *.wav
