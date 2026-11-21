@@ -9,6 +9,7 @@ export const DEFAULT_CONFIG = {
   sounds: true,
   warmSeconds: 120,
   recorder: null,
+  output: "clipboard",
 };
 
 export function daemonPaths(paths) {
@@ -31,6 +32,7 @@ export function normalizeConfig(raw = {}) {
     if (typeof raw.sounds === "boolean") config.sounds = raw.sounds;
     if (Number.isInteger(raw.warmSeconds) && raw.warmSeconds >= -1) config.warmSeconds = raw.warmSeconds;
     if (raw.recorder === null || typeof raw.recorder === "string") config.recorder = raw.recorder || null;
+    if (raw.output === "clipboard" || raw.output === "type") config.output = raw.output;
   }
   return config;
 }
